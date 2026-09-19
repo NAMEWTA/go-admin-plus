@@ -124,7 +124,7 @@ jobs:
           $main.Replace('fmt.Fprintln(os.Stderr, "desktop sidecar failed")', 'fmt.Fprintln(os.Stderr, "desktop sidecar failed:", err)') | Set-Content $diagnosticSource
           $hostSource = 'backend/internal/host/desktop/host.go'
           $hostCode = Get-Content $hostSource -Raw
-          $hostCode.Replace('return err', 'fmt.Fprintln(os.Stderr, "diagnostic stage:", err); return err') | Set-Content $hostSource
+          $hostCode.Replace('return errors.New("desktop instance lock failed")', 'fmt.Fprintln(os.Stderr, "diagnostic lock:", err); return errors.New("desktop instance lock failed")') | Set-Content $hostSource
           $directorySource = 'backend/internal/platform/desktop/directory.go'
           $directoryCode = Get-Content $directorySource -Raw
           $directoryCode = $directoryCode.Replace('"errors"', '"errors"; "fmt"')
