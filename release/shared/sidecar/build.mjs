@@ -81,7 +81,10 @@ const resolveToolchain = async () => {
         const metadata = await capture(command, ['env', 'GOROOT', 'GOMODCACHE'], {
           env: {
             PATH: path.dirname(command),
-            ...(process.env.HOME && path.isAbsolute(process.env.HOME) ? { HOME: process.env.HOME } : {})
+            ...(process.env.HOME && path.isAbsolute(process.env.HOME) ? { HOME: process.env.HOME } : {}),
+            // Windows 的 Go 使用 USERPROFILE 定位默认模块缓存，不能只传入 HOME。
+            ...(process.platform === 'win32' && process.env.USERPROFILE && path.isAbsolute(process.env.USERPROFILE)
+              ? { USERPROFILE: process.env.USERPROFILE } : {})
           }
         })
         const [goRoot, moduleCache, ...extra] = metadata.split(/\r?\n/)

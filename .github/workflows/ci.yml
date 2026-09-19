@@ -124,7 +124,7 @@ jobs:
             redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
           docker run --detach --rm --name go-admin-ci-s3 -p 127.0.0.1:9000:9000 \
             -e MINIO_ROOT_USER="$GO_ADMIN_TEST_S3_ACCESS_KEY" -e MINIO_ROOT_PASSWORD="$GO_ADMIN_TEST_S3_SECRET_KEY" \
-            minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e server /data
+            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e server /data
           for attempt in $(seq 1 30); do
             if docker exec go-admin-ci-redis redis-cli ping | grep -qx PONG && curl --fail --silent http://127.0.0.1:9000/minio/health/ready; then
               break
@@ -246,6 +246,7 @@ jobs:
         run: pnpm --dir frontend install --frozen-lockfile
       - name: Verify and build native host
         run: |
+          go -C backend mod download
           node release/shared/sidecar/build.mjs --host
           pnpm --dir frontend --filter @go-admin-plus/admin-desktop build
           cargo fmt --manifest-path frontend/apps/admin-desktop/src-tauri/Cargo.toml --check

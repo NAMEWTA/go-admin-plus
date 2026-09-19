@@ -7,8 +7,8 @@ output=$2
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]]
 repository=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd -P)
 node "$repository/release/shared/sidecar/build.mjs" --host
-corepack pnpm --dir "$repository/frontend" --filter @go-admin-plus/admin-desktop build
-corepack pnpm --dir "$repository/frontend" --filter @go-admin-plus/admin-desktop exec tauri build --features custom-protocol --bundles deb,appimage --config "{\"version\":\"$version\"}"
+corepack pnpm@11.1.3 --dir "$repository/frontend" --filter @go-admin-plus/admin-desktop build
+corepack pnpm@11.1.3 --dir "$repository/frontend" --filter @go-admin-plus/admin-desktop exec tauri build --features custom-protocol --bundles deb,appimage --config "{\"version\":\"$version\"}"
 mkdir -p "$output"
 cp "$repository"/frontend/apps/admin-desktop/src-tauri/target/release/bundle/deb/*.deb "$output/"
 cp "$repository"/frontend/apps/admin-desktop/src-tauri/target/release/bundle/appimage/*.AppImage "$output/"

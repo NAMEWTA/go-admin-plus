@@ -29,6 +29,8 @@ const config = join(repositoryRoot, 'scripts', 'contracts', 'redocly.yaml')
 const goConfigPath = join(repositoryRoot, 'scripts', 'contracts', 'oapi-codegen.yaml')
 const manifestPath = join('scripts', 'contracts', 'generated', 'manifest.json')
 const pnpm = process.platform === 'win32' ? 'corepack.cmd' : 'corepack'
+// 根目录没有 package.json，显式读取前端固定版本，避免 Corepack 回退到最新版。
+const packageManager = JSON.parse(readFileSync(join(uiRoot, 'package.json'), 'utf8')).packageManager
 const canonicalOutputs = {
   bundle: join('scripts', 'contracts', 'generated', 'openapi.json'),
   go: join('backend', 'internal', 'contracts', 'openapi.gen.go'),
@@ -112,7 +114,7 @@ const run = (command, args, options = {}) => {
 }
 
 const redocly = (...args) => run(pnpm, [
-  'pnpm',
+  packageManager,
   '--dir', uiRoot,
   '--filter', '@go-admin-plus/api-client',
   'exec', 'redocly',
@@ -194,7 +196,7 @@ const generateGo = (input, output, packageName) => {
 
 const generateTypescript = (input, schemaOutput, clientOutput, clientSource) => {
   run(pnpm, [
-  'pnpm',
+    packageManager,
     '--dir', uiRoot,
     '--filter', '@go-admin-plus/api-client',
     'exec', 'openapi-typescript', input,
