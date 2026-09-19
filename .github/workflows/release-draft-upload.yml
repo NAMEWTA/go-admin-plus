@@ -1,0 +1,87 @@
+name: Complete verified release draft assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Existing draft release ID with an uploaded SHA256SUMS manifest
+        required: true
+      artifact_run:
+        description: Run containing the already verified platform artifact
+        required: true
+      artifact_name:
+        description: Platform artifact to complete
+        type: choice
+        options: [release-linux-desktop, release-windows]
+        required: true
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  upload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DRAFT_RELEASE_ID: ${{ inputs.release_id }}
+      ARTIFACT_NAME: ${{ inputs.artifact_name }}
+    steps:
+      - uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        with:
+          name: ${{ inputs.artifact_name }}
+          run-id: ${{ inputs.artifact_run }}
+          github-token: ${{ github.token }}
+          path: platform-artifact
+      # 只补齐既有草稿清单中预先声明且哈希一致的附件，不覆盖文件、不公开发行。
+      - name: Validate source and upload missing assets
+        shell: python
+        run: |
+          import hashlib, json, os, pathlib, re, subprocess, tempfile
+          repository = os.environ['GITHUB_REPOSITORY']
+          release_id = os.environ['DRAFT_RELEASE_ID']
+          artifact = os.environ['ARTIFACT_NAME']
+          assert release_id.isdecimal()
+          assert artifact in {'release-linux-desktop', 'release-windows'}
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', f'repos/{repository}/{path}']))
+          release = api(f'releases/{release_id}')
+          version = release['tag_name']
+          assert release['draft'] and re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version)
+          target = api(f'git/ref/tags/{version}')['object']
+          if target['type'] == 'tag':
+              target = api(f'git/tags/{target["sha"]}')['object']
+          assert target['type'] == 'commit'
+          root = pathlib.Path('platform-artifact')
+          provenance = json.loads((root / 'provenance.json').read_text(encoding='utf-8-sig'))
+          assert provenance['version'] == version and provenance['sourceSha'] == target['sha']
+          published = {item['name']: item for item in release['assets']}
+          manifest = published['SHA256SUMS']
+          raw = subprocess.check_output(['gh', 'api', f'repos/{repository}/releases/assets/{manifest["id"]}', '-H', 'Accept: application/octet-stream'])
+          expected = {}
+          for line in raw.decode().splitlines():
+              match = re.fullmatch(r'([0-9a-f]{64})  ([A-Za-z0-9._-]+)', line)
+              assert match
+              digest, name = match.groups()
+              assert name not in expected
+              expected[name] = digest
+          pending = []
+          for path in sorted(root.rglob('*')):
+              if not path.is_file() or path.name == 'SHA256SUMS':
+                  continue
+              name = f'{artifact}-{path.relative_to(root).as_posix()}'.replace('/', '-').replace(' ', '-')
+              assert re.fullmatch(r'[A-Za-z0-9._-]+', name)
+              with path.open('rb') as stream:
+                  digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+              assert expected[name] == digest, name
+              if name in published:
+                  assert published[name]['state'] == 'uploaded' and published[name]['digest'] == f'sha256:{digest}', name
+              else:
+                  pending.append((path, name))
+          with tempfile.TemporaryDirectory() as directory:
+              for path, name in pending:
+                  staged = pathlib.Path(directory) / name
+                  staged.symlink_to(path.resolve())
+                  subprocess.run(['gh', 'release', 'upload', version, str(staged), '--repo', repository], check=True)
+                  print(f'VERIFIED_DRAFT_ASSET_UPLOADED {name}', flush=True)
