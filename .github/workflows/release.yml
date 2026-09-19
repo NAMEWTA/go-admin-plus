@@ -225,10 +225,15 @@ jobs:
           set -euo pipefail
           mkdir -p release-assets
           find artifacts -type f -print0 | while IFS= read -r -d '' file; do
-            platform=$(basename "$(dirname "$file")")
-            cp "$file" "release-assets/${platform}-${file##*/}"
+            # 发布时文件会加平台前缀，原目录内的校验清单不再适用。
+            [[ "${file##*/}" != SHA256SUMS ]] || continue
+            relative=${file#artifacts/}
+            destination="release-assets/${relative//\//-}"
+            test ! -e "$destination"
+            cp "$file" "$destination"
           done
           test -n "$(find release-assets -type f -print -quit)"
+          (cd release-assets && sha256sum -- * > SHA256SUMS && sha256sum -c SHA256SUMS)
       - name: Create published release from tag
         env:
           GH_TOKEN: ${{ github.token }}
