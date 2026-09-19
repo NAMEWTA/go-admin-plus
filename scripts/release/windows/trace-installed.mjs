@@ -41,6 +41,7 @@ const poll = async (description, operation, timeout = 90_000) => {
   let lastError
   while (Date.now() < end) {
     try { if (await operation()) return } catch (error) { lastError = error }
+    if (applicationProcess && applicationProcess.exitCode !== null) throw new Error(`installed application exited during ${description}: ${applicationProcess.exitCode}`)
     await delay(200)
   }
   throw new Error(`${description} timed out${lastError ? `: ${lastError.message}` : ''}`)
