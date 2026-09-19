@@ -27,6 +27,7 @@ jobs:
     timeout-minutes: 45
     env:
       RELEASE_VERSION: ${{ inputs.version }}
+      CANDIDATE_SOURCE_SHA: ${{ inputs.source_ref }}
     steps:
       - name: Configure byte-exact checkout
         shell: pwsh
@@ -42,6 +43,7 @@ jobs:
         shell: pwsh
         run: |
           if ($env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+$') { throw 'Exact release tag required.' }
+          if ($env:CANDIDATE_SOURCE_SHA -ne '' -and $env:CANDIDATE_SOURCE_SHA -notmatch '^[0-9a-f]{40}$') { throw 'Candidate source must be an immutable full commit SHA.' }
           $config = Get-Content frontend/apps/admin-desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
           if ($config.version -ne $env:RELEASE_VERSION) { throw 'Application version does not match the tag.' }
           $source = git rev-parse HEAD
@@ -116,22 +118,6 @@ jobs:
           $output = (Resolve-Path release-output).Path
           $installer = Join-Path $output "go-admin-plus-$env:RELEASE_VERSION-windows-x64-setup.exe"
           $evidence = Join-Path $output 'install-evidence.json'
-          # 一次性诊断程序仅在 runner 临时目录构建，不替换待验收安装包。
-          $diagnosticSource = Join-Path (Get-Location).Path 'backend/cmd/sidecar-diagnostic/main.go'
-          $diagnosticBinary = Join-Path $env:RUNNER_TEMP 'sidecar-diagnostic.exe'
-          New-Item -ItemType Directory -Path (Split-Path $diagnosticSource) | Out-Null
-          $main = Get-Content backend/cmd/desktop-sidecar/main.go -Raw
-          $main.Replace('fmt.Fprintln(os.Stderr, "desktop sidecar failed")', 'fmt.Fprintln(os.Stderr, "desktop sidecar failed:", err)') | Set-Content $diagnosticSource
-          $hostSource = 'backend/internal/host/desktop/host.go'
-          $hostCode = Get-Content $hostSource -Raw
-          $hostCode.Replace('return errors.New("desktop instance lock failed")', 'fmt.Fprintln(os.Stderr, "diagnostic lock:", err); return errors.New("desktop instance lock failed")') | Set-Content $hostSource
-          $directorySource = 'backend/internal/platform/desktop/directory.go'
-          $directoryCode = Get-Content $directorySource -Raw
-          $directoryCode = $directoryCode.Replace('"errors"', '"errors"; "fmt"')
-          $directoryCode.Replace('return "", errors.New("desktop directory is not canonical")', 'fmt.Fprintf(os.Stderr, "canonical mismatch: requested=%q resolved=%q error=%v\n", directory, real, err); return "", errors.New("desktop directory is not canonical")') | Set-Content $directorySource
-          go -C backend build -o $diagnosticBinary $diagnosticSource
-          if ($LASTEXITCODE -ne 0) { throw 'Diagnostic sidecar build failed.' }
-          node ./.release-tools/scripts/release/windows/probe-sidecar.mjs $diagnosticBinary
           ./.release-tools/scripts/release/windows/verify-install.ps1 -InstallerFile $installer -EvidenceFile $evidence -RepositoryRoot (Get-Location).Path
           ./scripts/release/windows/emit-artifacts.ps1 -Version $env:RELEASE_VERSION -SourceSha $env:SOURCE_SHA -InstallerFile $installer -ApplicationFile (Join-Path $output 'go-admin-plus-desktop.exe') -InstallEvidenceFile $evidence -OutputDirectory release-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

@@ -53,8 +53,8 @@ $sidecar = Join-Path $installDirectory 'go-admin-sidecar.exe'
 foreach ($file in @($application, $sidecar)) {
     if (-not (Test-Path -LiteralPath $file)) { throw "Installed payload is missing: $file" }
 }
-& node (Join-Path $PSScriptRoot 'probe-sidecar.mjs') $sidecar
-if ($LASTEXITCODE -ne 0) { throw 'Sidecar environment probe failed.' }
+& node (Join-Path $PSScriptRoot 'verify-sidecar.mjs') $sidecar
+if ($LASTEXITCODE -ne 0) { throw 'Installed sidecar startup verification failed.' }
 
 # 在一次性 runner 的真实用户数据目录准备旧基线；安装后的程序负责备份和自动迁移。
 $appDataRoot = Split-Path -Parent $dataRoot

@@ -180,7 +180,6 @@ jobs:
           go -C backend mod download
           go -C backend test ./internal/app/product -run '^TestDesktopHostWindowsExtendedPaths$' -count=1 -v
           if ($LASTEXITCODE -ne 0) { throw 'Windows desktop backend path verification failed.' }
-          cargo install tauri-driver --version 2.0.6 --locked
           $edge = Get-Item "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
           $edgeVersion = $edge.VersionInfo.ProductVersion
           $driverDirectory = Join-Path $env:RUNNER_TEMP 'edge-driver'
@@ -193,11 +192,24 @@ jobs:
           if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'fc5ffaeffb993576ece9c791da5a688fb2c8969a1479bbfe58583672c64da336') { throw 'Syft checksum mismatch.' }
           Expand-Archive -LiteralPath $archive -DestinationPath (Join-Path $env:RUNNER_TEMP 'syft')
           "$env:RUNNER_TEMP\syft" | Out-File -FilePath $env:GITHUB_PATH -Append
-      - name: Build and verify unsigned x64 NSIS installer
+      - name: Build unsigned x64 NSIS installer
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           ./scripts/release/windows/build-nsis.ps1 -Version $env:RELEASE_VERSION -OutputDirectory release-output
+          if ($LASTEXITCODE -ne 0) { throw 'Windows installer build failed.' }
+          @{version=$env:RELEASE_VERSION;sourceSha=$env:SOURCE_SHA} | ConvertTo-Json | Set-Content release-output/build-source.json
+      # 安装验收失败时仍保留原始安装包，可修复验证工具后复验同一份二进制。
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: windows-installer-${{ env.RELEASE_VERSION }}
+          path: release-output
+          if-no-files-found: error
+          retention-days: 7
+      - name: Verify installed Windows application
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
           ./scripts/release/windows/verify-install.ps1 -InstallerFile (Join-Path (Resolve-Path release-output) "go-admin-plus-$env:RELEASE_VERSION-windows-x64-setup.exe") -EvidenceFile (Join-Path (Resolve-Path release-output) 'install-evidence.json')
           ./scripts/release/windows/emit-artifacts.ps1 -Version $env:RELEASE_VERSION -SourceSha $env:SOURCE_SHA -InstallerFile (Join-Path (Resolve-Path release-output) "go-admin-plus-$env:RELEASE_VERSION-windows-x64-setup.exe") -ApplicationFile (Join-Path (Resolve-Path release-output) 'go-admin-plus-desktop.exe') -InstallEvidenceFile (Join-Path (Resolve-Path release-output) 'install-evidence.json') -OutputDirectory release-evidence
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

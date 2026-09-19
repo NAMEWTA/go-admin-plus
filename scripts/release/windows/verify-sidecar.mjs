@@ -1,4 +1,4 @@
-// 一次性 Windows runner 中诊断 sidecar 的最小操作系统环境，不读取真实用户数据。
+// 使用已安装的真实 sidecar 验证最小系统环境、扩展路径、就绪握手和父进程管道关闭。
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
@@ -6,9 +6,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 if (process.platform !== 'win32' || process.env.CI !== 'true' || process.env.GITHUB_ACTIONS !== 'true' || process.argv.length !== 3) {
-  throw new Error('sidecar environment probe requires an ephemeral Windows runner')
+  throw new Error('sidecar startup verification requires an ephemeral Windows runner')
 }
-// Node/libuv 会自动补充 SystemRoot；用 Rust 启动器复现生产环境的 env_clear。
+// Node/libuv 会自动补充系统环境；Rust 启动器只传递生产宿主允许的 SystemRoot。
 const launcherRoot = await mkdtemp(join(tmpdir(), 'go-admin-environment-launcher-'))
 const source = join(launcherRoot, 'launcher.rs')
 const executable = join(launcherRoot, 'launcher.exe')
@@ -17,21 +17,25 @@ use std::os::windows::process::CommandExt;
 fn main() {
     let args: Vec<String> = env::args().collect();
     let mut child = Command::new(&args[1]);
-    if args[2] != "inherited" { child.env_clear(); }
+    child.env_clear().env("SystemRoot", env::var_os("SystemRoot").expect("SystemRoot missing"));
     child.stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit()).creation_flags(0x08000000);
-    if args[2] == "system-root" { child.env("SystemRoot", env::var_os("SystemRoot").expect("SystemRoot missing")); }
     let status = child.status().expect("sidecar spawn failed");
     std::process::exit(status.code().unwrap_or(1));
 }`)
 const build = spawnSync('rustc', ['--edition=2024', source, '-o', executable], { stdio: 'inherit' })
-if (build.status !== 0) throw new Error('environment probe launcher could not be built')
-for (const name of ['inherited', 'empty', 'system-root']) {
-  const root = await realpath(await mkdtemp(join(tmpdir(), 'go-admin-sidecar-probe-')))
+if (build.status !== 0) throw new Error('sidecar verification launcher could not be built')
+let child
+let exited
+let root
+try {
+  root = await realpath(await mkdtemp(join(tmpdir(), 'go-admin-sidecar-check-')))
   const data = join(root, 'data')
   const logs = join(root, 'logs')
   await mkdir(data)
   await mkdir(logs)
-  const child = spawn(executable, [process.argv[2], name], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+  child = spawn(executable, [process.argv[2]], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
+  let spawnError
+  child.on('error', error => { spawnError = error })
   let output = ''
   let diagnostic = ''
   let port
@@ -41,7 +45,7 @@ for (const name of ['inherited', 'empty', 'system-root']) {
   })
   child.stderr.on('data', value => { diagnostic = `${diagnostic}${value}`.slice(-2048) })
   child.stdin.on('error', () => {})
-  const exited = new Promise(resolve => child.once('close', resolve))
+  exited = new Promise(resolve => child.once('close', resolve))
   const nonce = randomBytes(32).toString('base64url')
   child.stdin.write(`${JSON.stringify({
     dataDirectory: `\\\\?\\${data}`, logDirectory: `\\\\?\\${logs}`, loopbackPort: 0,
@@ -50,6 +54,7 @@ for (const name of ['inherited', 'empty', 'system-root']) {
   let ready = false
   const end = Date.now() + 15_000
   while (child.exitCode === null && Date.now() < end) {
+    if (spawnError) throw spawnError
     if (port) {
       const response = await fetch(`http://127.0.0.1:${port}/__desktop/ready`, { headers: { 'X-Go-Admin-Desktop-Nonce': nonce }, signal: AbortSignal.timeout(3000) })
       ready = response.status === 200
@@ -58,10 +63,24 @@ for (const name of ['inherited', 'empty', 'system-root']) {
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   child.stdin.end()
-  const killer = setTimeout(() => child.kill(), 6000)
-  await exited
-  clearTimeout(killer)
-  console.log(JSON.stringify({ probe: name, ready, exitCode: child.exitCode, diagnostic }))
-  await rm(root, { recursive: true, force: true })
+  await stopChild()
+  if (!ready || child.exitCode !== 0) throw new Error(`Installed sidecar startup/shutdown failed: exit=${child.exitCode}, ready=${ready}, ${diagnostic}`)
+  console.log('GO_ADMIN_WINDOWS_SIDECAR_STARTUP_PASS')
+} finally {
+  if (child) {
+    child.stdin.end()
+    await stopChild()
+  }
+  if (root) await rm(root, { recursive: true, force: true })
+  await rm(launcherRoot, { recursive: true, force: true })
 }
-await rm(launcherRoot, { recursive: true, force: true })
+
+async function stopChild() {
+  // 只终止本次启动器的进程树，避免超时后遗留持有数据库锁的 sidecar。
+  const killer = setTimeout(() => {
+    if (Number.isInteger(child.pid) && child.exitCode === null) {
+      spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true, timeout: 5000 })
+    }
+  }, 6000)
+  try { await exited } finally { clearTimeout(killer) }
+}

@@ -534,6 +534,15 @@ async fn start_runtime(app: tauri::AppHandle, state: Arc<HostState>) -> Result<(
         .sidecar("go-admin-sidecar")
         .map_err(|_| "desktop sidecar command unavailable")?
         .env_clear();
+    #[cfg(windows)]
+    let command = {
+        // Go 在 Windows 加载网络系统库需要 SystemRoot；其余父进程变量继续隔离。
+        let system_root = env::var_os("SystemRoot").ok_or("Windows system root unavailable")?;
+        if !Path::new(&system_root).is_absolute() || !Path::new(&system_root).is_dir() {
+            return Err("Windows system root invalid");
+        }
+        command.env("SystemRoot", system_root)
+    };
     let (mut events, mut child) = command
         .spawn()
         .map_err(|_| "desktop sidecar spawn failed")?;
@@ -992,9 +1001,9 @@ fn main() {
             move |app| {
                 let handle = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(_error) = start_runtime(handle.clone(), Arc::clone(&state)).await {
-                        #[cfg(feature = "native-e2e")]
-                        eprintln!("desktop native startup failed: {_error}");
+                    if let Err(error) = start_runtime(handle.clone(), Arc::clone(&state)).await {
+                        // 启动错误均为固定阶段描述，不记录路径、令牌或后端原始响应。
+                        eprintln!("desktop startup failed: {error}");
                         state.fail_and_exit(&handle);
                     }
                 });

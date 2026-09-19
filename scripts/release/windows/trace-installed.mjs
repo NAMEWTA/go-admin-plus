@@ -18,6 +18,7 @@ const endpoint = 'http://127.0.0.1:4444'
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const driver = spawn('msedgedriver.exe', ['--port=4444'], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true })
 let applicationProcess
+let applicationError = ''
 let driverError = ''
 driver.stderr.on('data', chunk => { driverError = `${driverError}${chunk}`.slice(-4096) })
 
@@ -53,7 +54,9 @@ const waitForDriver = () => poll('Edge driver readiness', async () => {
 }, 30_000)
 const createSession = async () => {
   // 先启动原始安装程序，再连接 WebView2。避免驱动在临时配置目录找不到调试端口。
-  applicationProcess = spawn(application, [], { stdio: 'ignore', windowsHide: false })
+  applicationError = ''
+  applicationProcess = spawn(application, [], { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: false })
+  applicationProcess.stderr.on('data', chunk => { applicationError = `${applicationError}${chunk}`.slice(-2048) })
   let spawnError
   applicationProcess.on('error', error => { spawnError = error })
   const deadline = Date.now() + 30_000
@@ -186,6 +189,7 @@ try {
 } catch (error) {
   // 仅记录一次性 CI 账号的页面文字和生命周期，排查连接页/登录页初始化故障。
   process.stderr.write(`installed application exit=${applicationProcess?.exitCode ?? 'running'}\n`)
+  if (applicationError) process.stderr.write(`application diagnostics: ${applicationError}\n`)
   if (activeSession) {
     try {
       const page = await execute(activeSession, `return {
