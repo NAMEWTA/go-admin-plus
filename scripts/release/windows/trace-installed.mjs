@@ -106,7 +106,10 @@ const loginIfRequired = async session => {
     return Boolean(document.querySelector('form[aria-label="登录"]') || document.querySelector('nav[aria-label="主导航"]'))
   `))
   const loginVisible = await execute(session, 'return Boolean(document.querySelector(\'form[aria-label="登录"]\'))')
-  if (!loginVisible) return false
+  if (!loginVisible) {
+    await waitForWorkspaceRoute(session)
+    return false
+  }
   await execute(session, `
     const form = document.querySelector('form[aria-label="登录"]')
     const username = form?.querySelector('input[autocomplete="username"]')
@@ -119,9 +122,13 @@ const loginIfRequired = async session => {
     form.requestSubmit()
     return true
   `, ['admin', 'administrator password'])
-  await poll('authenticated workspace', () => execute(session, 'return Boolean(document.querySelector(\'nav[aria-label="主导航"]\'))'))
+  await waitForWorkspaceRoute(session)
   return true
 }
+// 登录后首个默认路由仍可能在加载；菜单出现不代表路由重定向已经完成。
+const waitForWorkspaceRoute = session => poll('authenticated workspace route', () => execute(session, `
+  return Boolean(document.querySelector('nav[aria-label="主导航"] button[aria-current="page"]'))
+`))
 const openRoles = async session => {
   await poll('角色管理导航', () => execute(session, `
     const button = [...document.querySelectorAll('nav[aria-label="主导航"] button')].find(value => value.textContent?.trim() === '角色管理')
