@@ -38,11 +38,12 @@ const request = async (path, method = 'GET', body) => {
 }
 const poll = async (description, operation, timeout = 90_000) => {
   const end = Date.now() + timeout
+  let lastError
   while (Date.now() < end) {
-    try { if (await operation()) return } catch { /* application may still be starting */ }
+    try { if (await operation()) return } catch (error) { lastError = error }
     await delay(200)
   }
-  throw new Error(`${description} timed out`)
+  throw new Error(`${description} timed out${lastError ? `: ${lastError.message}` : ''}`)
 }
 const waitForDriver = () => poll('Edge driver readiness', async () => {
   if (driver.exitCode !== null) throw new Error('Edge driver exited before accepting a session')
@@ -182,6 +183,18 @@ try {
   }, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' })
   process.stdout.write('GO_ADMIN_WINDOWS_INSTALLED_TRACER_PASS\n')
 } catch (error) {
+  // 仅记录一次性 CI 账号的页面文字和生命周期，排查连接页/登录页初始化故障。
+  process.stderr.write(`installed application exit=${applicationProcess?.exitCode ?? 'running'}\n`)
+  if (activeSession) {
+    try {
+      const page = await execute(activeSession, `return {
+        url: location.href, title: document.title, state: document.readyState,
+        text: document.body?.innerText?.slice(0, 2000),
+        forms: [...document.querySelectorAll('form')].map(form => form.getAttribute('aria-label'))
+      }`)
+      process.stderr.write(`${JSON.stringify(page)}\n`)
+    } catch (diagnosticError) { process.stderr.write(`page diagnostics unavailable: ${diagnosticError.message}\n`) }
+  }
   if (activeSession) await closeSession(activeSession).catch(() => {})
   if (driverError) process.stderr.write('Edge driver diagnostics were captured\n')
   throw error
