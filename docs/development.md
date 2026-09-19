@@ -1,6 +1,6 @@
 # 开发指南
 
-当前产品版本为 `0.0.2`。后端与前端的目录边界、调用层级和编码规则分别以
+当前产品版本为 `0.0.3`。后端与前端的目录边界、调用层级和编码规则分别以
 [backend-development](../.agents/skills/backend-development/SKILL.md) 与
 [frontend-development](../.agents/skills/frontend-development/SKILL.md) 为准；新增垂直切片时再读取对应的
 `new-business-module` 或 `new-list-page` skill。
@@ -9,7 +9,7 @@
 
 | 工具 | 本地合同 | CI 验证基线 |
 |---|---|---|
-| Go | 1.26.5 或更高版本；最低版本由 `go-admin-plus/go.mod` 管理 | 1.26.5 |
+| Go | 1.26.8 或更高版本；最低版本由 `backend/go.mod` 管理 | 1.26.8 |
 | Go Task | 3.48.0；根命令合同要求精确版本 | 3.48.0 |
 | Node.js | 22 或更高版本；范围由 Workspace `engines` 管理 | Node.js 22.22.3 |
 | pnpm | 11.1.3；由 Workspace `packageManager` 固定 | 11.1.3 |
@@ -28,10 +28,10 @@ task --version # 必须输出 3.48.0
 首次安装前端依赖：
 
 ```bash
-pnpm --dir go-admin-plus-ui install --frozen-lockfile
+pnpm --dir frontend install --frozen-lockfile
 
 # 仅安装了 Corepack 时仍显式选择仓库固定版本
-corepack pnpm@11.1.3 --dir go-admin-plus-ui install --frozen-lockfile
+corepack pnpm@11.1.3 --dir frontend install --frozen-lockfile
 ```
 
 根 Task 优先使用 PATH 中精确匹配 11.1.3 的 pnpm。Node 工具管理器未把 pnpm shim 传给子进程时，命令面会在根 `.artifacts/tool-shims/` 中原子生成并使用固定 `pnpm@11.1.3` 的 Corepack shim；该目录不进入源码或发行制品。Desktop 开发建议使用 CI 基线 Rust 1.96.0；最低版本只表示 Cargo 允许编译，不替代 CI 基线验证。
@@ -45,8 +45,8 @@ serve 顺序启动。先用密码管理器或本地编辑器创建只允许当�
 ```bash
 task migrate PROFILE=server-sqlite
 
-cd go-admin-plus
-go run ./cmd/go-admin-plus bootstrap --profile server-sqlite \
+cd backend
+go run ./cmd/server bootstrap --profile server-sqlite \
   --sqlite-path ../.data/server/go-admin-plus.sqlite3 --data-root ../.data/server \
   --username admin --display-name "System Administrator" \
   --email admin@example.test --secret-file "$SECRET_FILE"
@@ -57,7 +57,7 @@ task dev TARGET=server PROFILE=server-sqlite
 ```
 
 另开终端执行 `task dev TARGET=web`。Web 默认连接 `127.0.0.2:8080`；使用刚创建的账号
-登录后，可验证 IAM 账号与角色、审计、调度、文件容量和 Demo CRUD。SQLite Server 用
+登录后，可验证 IAM 账号与角色、审计、调度和文件管理。SQLite Server 用
 `serve --with-worker` 单进程运行，且由实例锁阻止两个写入宿主同时打开同一数据库。
 
 ## Server PostgreSQL
@@ -69,8 +69,8 @@ task dev TARGET=server PROFILE=server-sqlite
 ```bash
 GO_ADMIN_DATABASE_DSN_FILE="$DSN_FILE" task migrate PROFILE=server-postgres
 
-cd go-admin-plus
-GO_ADMIN_DATABASE_DSN_FILE="$DSN_FILE" go run ./cmd/go-admin-plus bootstrap \
+cd backend
+GO_ADMIN_DATABASE_DSN_FILE="$DSN_FILE" go run ./cmd/server bootstrap \
   --profile server-postgres --data-root ../.data/server \
   --username admin --display-name "System Administrator" \
   --email admin@example.test --secret-file "$SECRET_FILE"
@@ -81,12 +81,12 @@ GO_ADMIN_DATABASE_DSN_FILE="$DSN_FILE" task dev TARGET=server PROFILE=server-pos
 GO_ADMIN_DATABASE_DSN_FILE="$DSN_FILE" task worker PROFILE=server-postgres
 ```
 
-非敏感配置可通过 `GO_ADMIN_CONFIG_FILE` 指向符合 `go-admin-plus/config/schema/` 的 JSON 文件。
+非敏感配置可通过 `GO_ADMIN_CONFIG_FILE` 指向统一 YAML 文件，示例见 `backend/config/config.example.yaml`。
 
 ## Desktop
 
 Desktop 是 Tauri 2 App，运行 profile 为 `desktop-sqlite`。开发命令先为当前平台构建 Go
-sidecar，再启动 Tauri；sidecar 只使用 App 数据目录中的 SQLite，不连接 Server PostgreSQL。
+sidecar，再启动 Tauri。本地模式使用 App 数据目录中的 SQLite；远程模式不启动 sidecar，通过原生 HTTPS 代理连接服务端。
 空状态由原生首次设置页收集管理员信息，密码通过 Tauri command 进入宿主，不进入 WebView
 持久存储。宿主先备份已有库再自动执行 Desktop SQLite 向前迁移。
 
@@ -110,15 +110,14 @@ GO_ADMIN_DATABASE_DSN_FILE=/absolute/path/to/dsn task migrate PROFILE=server-pos
 
 `task doctor PROFILE=server-sqlite` 或带 DSN 文件的 PostgreSQL 形式输出机器可读 JSON。
 `healthy` 与 `degraded` 可为零退出；无效配置、schema mismatch 或依赖失败非零。日志级别由
-`GO_ADMIN_LOG_LEVEL=debug|info|warn|error` 或 profile JSON 的 `log.level` 控制。日志包含服务、
+`GO_ADMIN_LOG_LEVEL=debug|info|warn|error` 或 YAML 配置 的 `log.level` 控制。日志包含服务、
 版本、profile、trace/request、route/module、状态、延迟、数据库与错误分类，但不记录请求正文、
 密码、Session 或 DSN。故障处理见[运维与恢复](operations.md)。
 
 ## 构建与本地打包
 
 `build` 验证可编译目标。`TARGET=desktop` 会先构建当前宿主的 Go sidecar，再以
-`custom-protocol` release 模式编译 Tauri 2 宿主，但不生成 bundle。Desktop 仅支持 macOS
-与 Windows，因此包含 Desktop 的 `TARGET=all` 也只支持这两个宿主。`package` 生成当前宿主
+`custom-protocol` release 模式编译 Tauri 2 宿主，但不生成 bundle。Desktop 支持 macOS arm64/x64、Windows x64 和 Linux x64。`package` 生成当前宿主
 可用的本地制品：
 
 ```bash
@@ -129,7 +128,7 @@ task package TARGET=desktop
 ```
 
 Server 和 Web 制品写入根 `.artifacts/packages/`。Desktop 使用 Tauri 2 的目标目录：macOS
-生成 `.app`，Windows 生成 NSIS；不支持 Linux Desktop。本地 Desktop package 只用于构建验证，
+生成 `.app`，Windows 生成 NSIS，Linux x64 生成 deb/AppImage。本地 Desktop package 只用于构建验证，
 不构成已签名发行候选。
 
 ## 验证
@@ -145,4 +144,4 @@ task compatibility:zero
 task docs:check
 ```
 
-前端单独验证可在 `go-admin-plus-ui/` 运行 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm check:workspace` 和 `pnpm build`。
+前端单独验证可在 `frontend/` 运行 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm check:workspace` 和 `pnpm build`。

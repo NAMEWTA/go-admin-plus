@@ -71,13 +71,13 @@ services:
     command:
       - migrate
       - --profile=server-postgres
-      - --config=/run/config/server-postgres.json
+      - --config=/run/config/server-postgres.yaml
       - --data-root=/var/lib/go-admin-plus
     environment:
       GO_ADMIN_DATABASE_DSN_FILE: /run/secrets/database_dsn
     configs:
       - source: server_postgres
-        target: /run/config/server-postgres.json
+        target: /run/config/server-postgres.yaml
     secrets: [database_dsn]
     volumes:
       - postgres-product-data:/var/lib/go-admin-plus
@@ -94,13 +94,13 @@ services:
     command:
       - serve
       - --profile=server-postgres
-      - --config=/run/config/server-postgres.json
+      - --config=/run/config/server-postgres.yaml
       - --data-root=/var/lib/go-admin-plus
     environment:
       GO_ADMIN_DATABASE_DSN_FILE: /run/secrets/database_dsn
     configs:
       - source: server_postgres
-        target: /run/config/server-postgres.json
+        target: /run/config/server-postgres.yaml
     secrets: [database_dsn]
     volumes:
       - postgres-product-data:/var/lib/go-admin-plus
@@ -116,13 +116,13 @@ services:
     command:
       - worker
       - --profile=server-postgres
-      - --config=/run/config/server-postgres.json
+      - --config=/run/config/server-postgres.yaml
       - --data-root=/var/lib/go-admin-plus
     environment:
       GO_ADMIN_DATABASE_DSN_FILE: /run/secrets/database_dsn
     configs:
       - source: server_postgres
-        target: /run/config/server-postgres.json
+        target: /run/config/server-postgres.yaml
     secrets: [database_dsn]
     volumes:
       - postgres-product-data:/var/lib/go-admin-plus
@@ -143,22 +143,47 @@ services:
       api-postgres:
         condition: service_healthy
 
-  api-sqlite:
+  migrate-sqlite:
     <<: *api
     profiles: [sqlite]
     command:
-      - serve
+      - migrate
       - --profile=server-sqlite
-      - --config=/run/config/server-sqlite.json
+      - --config=/run/config/server-sqlite.yaml
       - --data-root=/var/lib/go-admin-plus
       - --with-worker
     environment:
       GO_ADMIN_SQLITE_PATH: /var/lib/go-admin-plus/database.sqlite3
     configs:
       - source: server_sqlite
-        target: /run/config/server-sqlite.json
+        target: /run/config/server-sqlite.yaml
     volumes:
       - sqlite-product-data:/var/lib/go-admin-plus
+
+    healthcheck:
+      disable: true
+    restart: "no"
+
+  api-sqlite:
+    <<: *api
+    profiles: [sqlite]
+    command:
+      - serve
+      - --profile=server-sqlite
+      - --config=/run/config/server-sqlite.yaml
+      - --data-root=/var/lib/go-admin-plus
+      - --with-worker
+    environment:
+      GO_ADMIN_SQLITE_PATH: /var/lib/go-admin-plus/database.sqlite3
+    configs:
+      - source: server_sqlite
+        target: /run/config/server-sqlite.yaml
+    volumes:
+      - sqlite-product-data:/var/lib/go-admin-plus
+
+    depends_on:
+      migrate-sqlite:
+        condition: service_completed_successfully
 
   web-sqlite:
     <<: *web
@@ -171,9 +196,9 @@ services:
 
 configs:
   server_postgres:
-    file: ./config/server-postgres.json
+    file: ./config/server-postgres.yaml
   server_sqlite:
-    file: ./config/server-sqlite.json
+    file: ./config/server-sqlite.yaml
 
 secrets:
   postgres_password:

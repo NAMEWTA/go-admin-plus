@@ -8,13 +8,13 @@ description: Scaffold a current Go Admin Plus single-table CRUD vertical module 
 为当前 Greenfield 架构新增一个单表 CRUD 垂直切片。先读根 `AGENTS.md`、当前 Speculo 状态、
 [`backend-development`](../backend-development/SKILL.md) 和以下权威实现：
 
-- 完整参考切片：`go-admin-plus/internal/modules/demo/`
-- 前端参考：`go-admin-plus-ui/packages/domains/demo/` 与 `packages/web-domains/demo/`
-- 产品组合：`go-admin-plus/internal/app/product/registry.go`、`runtime.go`
-- 双 App 组合：`go-admin-plus-ui/packages/app-shell/src/product/`
+- 完整参考切片：`backend/internal/modules/scheduler/`
+- 前端参考：`frontend/packages/domains/scheduler/` 与 `packages/web-domains/scheduler/`
+- 产品组合：`backend/internal/app/product/registry.go`、`runtime.go`
+- 双 App 组合：`frontend/packages/app-shell/src/product/`
 
 模块文件需要在受控路径中手工创建并逐项接入产品组合，不会自动完成产品注册。当前正式模块为
-`iam`、`audit`、`scheduler`、`files`、`demo`；不要恢复已经从产品组合中移除的旧业务体系。
+`iam`、`audit`、`scheduler`、`files`；不要恢复已经从产品组合中移除的旧业务体系。
 
 ## 适用边界
 
@@ -30,7 +30,7 @@ description: Scaffold a current Go Admin Plus single-table CRUD vertical module 
 
 ### 2. 建立双方言 Migration
 
-在 `go-admin-plus/internal/modules/<module>/migrations/` 创建模块 Provider，并为 PostgreSQL、SQLite 分别提供同版本向前 Migration。使用当前 migration runner，不在服务启动或 repository 中创建/修改表。
+在 `backend/internal/modules/<module>/migrations/` 创建模块 Provider，并为 PostgreSQL、SQLite 分别提供同版本向前 Migration。使用当前 migration runner，不在服务启动或 repository 中创建/修改表。
 
 实现模块前先在隔离的本地 profile 执行 Migration，并从受控路径审查新增文件；拒绝覆盖其他模块或共享文件。
 
@@ -77,8 +77,8 @@ task test
 task lint
 task architecture:check
 task compatibility:zero
-pnpm --dir go-admin-plus-ui check:workspace
-pnpm --dir go-admin-plus-ui build
+pnpm --dir frontend check:workspace
+pnpm --dir frontend build
 ```
 
 另外运行模块 Go 测试、双方言 Migration/CRUD 测试以及两个前端 package 的 typecheck/test。E2E 是否执行由当前 Goal Plan 和用户授权决定，不能用单元测试替代其最终状态。

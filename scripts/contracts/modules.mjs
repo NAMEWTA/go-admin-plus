@@ -13,7 +13,7 @@ export const parseManagedModuleOutput = value => {
   const segments = value.split('/')
   if (segments.some(segment => segment.length === 0 || segment === '.' || segment === '..')) return undefined
 
-  if (segments.length >= 6 && segments.slice(0, 3).join('/') === 'go-admin-plus/internal/modules') {
+  if (segments.length >= 6 && segments.slice(0, 3).join('/') === 'backend/internal/modules') {
     const owner = segments[3]
     const nested = segments.slice(4, -2)
     const directory = segments.at(-2)
@@ -25,7 +25,7 @@ export const parseManagedModuleOutput = value => {
     return undefined
   }
 
-  if (segments.slice(0, 3).join('/') === 'go-admin-plus-ui/packages/domains') {
+  if (segments.slice(0, 3).join('/') === 'frontend/packages/domains') {
     const owner = segments[3]
     if (!moduleIdPattern.test(owner) || segments[4] !== 'src') return undefined
     const filename = segments.at(-1)

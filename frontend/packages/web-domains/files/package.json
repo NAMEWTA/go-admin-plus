@@ -1,0 +1,27 @@
+{
+  "name": "@go-admin-plus/web-domain-files",
+  "version": "0.0.3",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@go-admin-plus/domain-files": "workspace:*",
+    "@go-admin-plus/platform": "workspace:*",
+    "@go-admin-plus/ui": "workspace:*",
+    "@lucide/vue": "catalog:",
+    "vue": "catalog:"
+  },
+  "scripts": {
+    "test": "vitest run src",
+    "typecheck": "vue-tsc -p src/tsconfig.json"
+  },
+  "devDependencies": {
+    "@vue/compiler-sfc": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vue-tsc": "catalog:"
+  }
+}

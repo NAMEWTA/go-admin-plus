@@ -1,0 +1,32 @@
+{
+  "name": "@go-admin-plus/admin-desktop",
+  "version": "0.0.3",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/main.ts"
+  },
+  "scripts": {
+    "dev": "vite --config vite.config.ts",
+    "dev:native": "node ../../../release/shared/sidecar/build.mjs --host && tauri dev",
+    "build": "vite build --config vite.config.ts && node scripts/verify-production.mjs",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@go-admin-plus/adapter-desktop": "workspace:*",
+    "@go-admin-plus/app-shell": "workspace:*",
+    "@go-admin-plus/ui": "workspace:*",
+    "@tauri-apps/api": "2.11.1",
+    "vue": "catalog:"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.1",
+    "@types/node": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/compiler-sfc": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vue-tsc": "catalog:"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@go-admin-plus/adapter-browser",
+  "version": "0.0.3",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@go-admin-plus/platform": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run src",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

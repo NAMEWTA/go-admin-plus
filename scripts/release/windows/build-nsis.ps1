@@ -19,7 +19,7 @@ if ($identity.releaseClass -ne 'private-release' -or $identity.signingRequired -
 
 node (Join-Path $repository 'release/shared/sidecar/build.mjs') --target $identity.targetTriple
 if ($LASTEXITCODE -ne 0) { throw 'Windows sidecar build failed.' }
-pnpm --dir (Join-Path $repository 'go-admin-plus-ui') --filter '@go-admin-plus/admin-desktop' build
+pnpm --dir (Join-Path $repository 'frontend') --filter '@go-admin-plus/admin-desktop' build
 if ($LASTEXITCODE -ne 0) { throw 'Desktop frontend build failed.' }
 
 $config = [ordered]@{
@@ -35,21 +35,21 @@ $config = [ordered]@{
 $configPath = Join-Path ([System.IO.Path]::GetTempPath()) "go-admin-plus-tauri-$PID-$Version.json"
 try {
     $config | Set-Content -LiteralPath $configPath -Encoding utf8NoBOM
-    pnpm --dir (Join-Path $repository 'go-admin-plus-ui') --filter '@go-admin-plus/admin-desktop' exec tauri build `
+    pnpm --dir (Join-Path $repository 'frontend') --filter '@go-admin-plus/admin-desktop' exec tauri build `
         --target $identity.targetTriple --features custom-protocol --bundles nsis --config $configPath
     if ($LASTEXITCODE -ne 0) { throw 'Unsigned Tauri NSIS build failed.' }
 } finally {
     Remove-Item -LiteralPath $configPath -Force -ErrorAction SilentlyContinue
 }
 
-$target = Join-Path $repository "go-admin-plus-ui/apps/admin-desktop/src-tauri/target/$($identity.targetTriple)/release"
+$target = Join-Path $repository "frontend/apps/admin-desktop/src-tauri/target/$($identity.targetTriple)/release"
 $application = Join-Path $target 'go-admin-plus-desktop.exe'
-$sidecar = Join-Path $repository 'go-admin-plus-ui/apps/admin-desktop/src-tauri/binaries/go-admin-sidecar-x86_64-pc-windows-msvc.exe'
+$sidecar = Join-Path $repository 'frontend/apps/admin-desktop/src-tauri/binaries/go-admin-sidecar-x86_64-pc-windows-msvc.exe'
 $installer = @(Get-ChildItem -LiteralPath (Join-Path $target 'bundle/nsis') -Filter '*-setup.exe' -File)
 if (-not (Test-Path -LiteralPath $application) -or -not (Test-Path -LiteralPath $sidecar) -or $installer.Count -ne 1) {
     throw 'Expected Tauri outputs are incomplete.'
 }
-node (Join-Path $repository 'go-admin-plus-ui/apps/admin-desktop/scripts/verify-production.mjs') --files $application $sidecar
+node (Join-Path $repository 'frontend/apps/admin-desktop/scripts/verify-production.mjs') --files $application $sidecar
 if ($LASTEXITCODE -ne 0) { throw 'Production Desktop artifacts retained native test controls.' }
 
 New-Item -ItemType Directory -Path $OutputDirectory | Out-Null

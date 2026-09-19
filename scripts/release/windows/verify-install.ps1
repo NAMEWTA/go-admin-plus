@@ -13,8 +13,12 @@ $repository = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 $identity = Get-Content -LiteralPath (Join-Path $repository 'release/windows/identity.json') -Raw | ConvertFrom-Json
 $installer = (Resolve-Path -LiteralPath $InstallerFile).Path
 $installDirectory = Join-Path $env:RUNNER_TEMP "go-admin-plus-install-$([guid]::NewGuid().ToString('N'))"
-$dataRoot = Join-Path $installDirectory 'data'
-$logRoot = Join-Path $installDirectory 'logs'
+$dataRoot = Join-Path $env:LOCALAPPDATA 'com.goadmin.plus/data'
+$logRoot = Join-Path $env:LOCALAPPDATA 'com.goadmin.plus/logs'
+$configRoot = Join-Path $env:APPDATA 'com.goadmin.plus'
+$configFile = Join-Path $configRoot 'connection.json'
+if (Test-Path -LiteralPath $configFile) { throw 'Existing connection settings must not be modified.' }
+if (Test-Path -LiteralPath $dataRoot) { throw 'Existing user data must not be modified.' }
 $credentialTarget = 'desktop-session-vault.com.goadmin.plus.stronghold'
 if (Test-Path -LiteralPath $installDirectory) { throw 'Install directory already exists.' }
 
@@ -49,9 +53,18 @@ foreach ($file in @($application, $sidecar)) {
     if (-not (Test-Path -LiteralPath $file)) { throw "Installed payload is missing: $file" }
 }
 
-New-Item -ItemType Directory -Path $dataRoot | Out-Null
+# 在一次性 runner 的真实用户数据目录准备旧基线；安装后的程序负责备份和自动迁移。
+$appDataRoot = Split-Path -Parent $dataRoot
+New-Item -ItemType Directory -Path $appDataRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $configRoot -Force | Out-Null
+[IO.File]::WriteAllText($configFile, '{"mode":"local","serverUrl":"","caCertificate":""}', [Text.UTF8Encoding]::new($false))
+& go -C (Join-Path $repository 'backend') run ./test/desktop/fixture --root $appDataRoot --mode previous
+if ($LASTEXITCODE -ne 0) { throw 'Installed desktop fixture preparation failed.' }
+$traceFile = Join-Path $env:RUNNER_TEMP "desktop-trace-$([guid]::NewGuid().ToString('N')).json"
+& node (Join-Path $PSScriptRoot 'trace-installed.mjs') --application $application --evidence $traceFile
+if ($LASTEXITCODE -ne 0) { throw 'Installed desktop UI verification failed.' }
+$trace = Get-Content -LiteralPath $traceFile -Raw | ConvertFrom-Json
 $database = Join-Path $dataRoot 'go-admin-plus.db'
-New-Item -ItemType File -Path $database | Out-Null
 
 $databaseHash = (Get-FileHash -LiteralPath $database -Algorithm SHA256).Hash.ToLowerInvariant()
 $uninstallEntry = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' |
@@ -74,7 +87,7 @@ $uninstall = Start-Process -FilePath $uninstaller -ArgumentList '/S' -Wait -Pass
 if ($uninstall.ExitCode -ne 0) { throw "NSIS uninstall failed with code $($uninstall.ExitCode)." }
 if (Test-Path -LiteralPath $application) { throw 'Uninstall left the installed application.' }
 if ((Get-Content -LiteralPath $sentinel -Raw).Trim() -ne $sentinelValue -or -not (Test-Path -LiteralPath $database)) {
-    throw 'Uninstall violated the install-path data preservation boundary.'
+    throw 'Uninstall violated the user-data preservation boundary.'
 }
 [ordered]@{
     schemaVersion = 1
@@ -84,11 +97,11 @@ if ((Get-Content -LiteralPath $sentinel -Raw).Trim() -ne $sentinelValue -or -not
     logDirectory = $logRoot
     installPathSelected = $true
     firstLaunch = 'passed'
-    login = 'not-run'
-    crudCreate = 'not-run'
-    restart = 'not-run'
-    persistence = 'not-run'
-    crudDelete = 'not-run'
+    login = $trace.firstLaunchLogin
+    crudCreate = $trace.create
+    restart = $trace.restart
+    persistence = $trace.persistence
+    crudDelete = $trace.delete
     sqlitePathStable = $true
     sqliteInitialSha256 = $databaseHash
     appDataPreserved = $true

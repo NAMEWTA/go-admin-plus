@@ -19,9 +19,14 @@
     "removeInstallDirectory": true
   },
   "dataPaths": {
-    "data": "<selected-install-directory>\\data",
-    "logs": "<selected-install-directory>\\logs"
+    "data": "%LOCALAPPDATA%\\com.goadmin.plus\\data",
+    "logs": "%LOCALAPPDATA%\\com.goadmin.plus\\logs"
   },
   "remotePublish": false,
-  "evidence": ["SHA256SUMS", "SPDX JSON", "provenance.json", "install-evidence.json"]
+  "evidence": [
+    "SHA256SUMS",
+    "SPDX JSON",
+    "provenance.json",
+    "install-evidence.json"
+  ]
 }

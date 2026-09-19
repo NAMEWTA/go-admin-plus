@@ -1,0 +1,32 @@
+{
+  "name": "@go-admin-plus/app-shell",
+  "version": "0.0.3",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/core/index.ts",
+    "./product": "./src/product/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run src/product/manifest.spec.ts --environment node",
+    "typecheck": "vue-tsc --noEmit -p src/product/tsconfig.json"
+  },
+  "dependencies": {
+    "@go-admin-plus/domain-iam": "workspace:*",
+    "@go-admin-plus/platform": "workspace:*",
+    "@go-admin-plus/ui": "workspace:*",
+    "@go-admin-plus/web-domain-audit": "workspace:*",
+    "@go-admin-plus/web-domain-files": "workspace:*",
+    "@go-admin-plus/web-domain-iam": "workspace:*",
+    "@go-admin-plus/web-domain-scheduler": "workspace:*",
+    "@lucide/vue": "catalog:",
+    "vue": "catalog:",
+    "vue-router": "catalog:"
+  },
+  "devDependencies": {
+    "@vue/compiler-sfc": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "vue-tsc": "catalog:"
+  }
+}

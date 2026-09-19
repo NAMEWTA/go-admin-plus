@@ -4,39 +4,39 @@ silent: true
 
 vars:
   PROFILE: '{{default "server-sqlite" .PROFILE}}'
-  RUN_SCRIPT: node scripts/go-admin-plus/run-script.mjs
+  RUN_SCRIPT: node scripts/backend/run-script.mjs
 
 tasks:
   default:
     desc: List the public product tasks
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/task-list.sh'
+      - '{{.RUN_SCRIPT}} scripts/backend/task-list.sh'
 
   dev:
     desc: Start one development target (TARGET=server|web|desktop)
     vars:
       TARGET: '{{default "server" .TARGET}}'
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/dev.sh "{{.TARGET}}" "{{.PROFILE}}"'
+      - '{{.RUN_SCRIPT}} scripts/backend/dev.sh "{{.TARGET}}" "{{.PROFILE}}"'
 
   build:
     desc: Build product targets (TARGET=all|server|web|desktop)
     vars:
       TARGET: '{{default "all" .TARGET}}'
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/build.sh "{{.TARGET}}" "{{.PROFILE}}"'
+      - '{{.RUN_SCRIPT}} scripts/backend/build.sh "{{.TARGET}}" "{{.PROFILE}}"'
 
   test:
     desc: Run backend and frontend non-E2E tests
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/test.sh'
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus-ui/test.sh'
+      - '{{.RUN_SCRIPT}} scripts/backend/test.sh'
+      - '{{.RUN_SCRIPT}} scripts/frontend/test.sh'
 
   lint:
     desc: Run backend and frontend static checks
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/lint.sh'
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus-ui/lint.sh'
+      - '{{.RUN_SCRIPT}} scripts/backend/lint.sh'
+      - '{{.RUN_SCRIPT}} scripts/frontend/lint.sh'
 
   generate:
     desc: Regenerate canonical backend and frontend transports
@@ -56,41 +56,41 @@ tasks:
   migrate:
     desc: Migrate the selected backend profile database
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/migrate.sh "{{.PROFILE}}"'
+      - '{{.RUN_SCRIPT}} scripts/backend/migrate.sh "{{.PROFILE}}"'
 
   worker:
     desc: Run the dedicated backend worker role
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/worker.sh "{{.PROFILE}}"'
+      - '{{.RUN_SCRIPT}} scripts/backend/worker.sh "{{.PROFILE}}"'
 
   doctor:
     desc: Run the read-only backend diagnostic report
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/doctor.sh "{{.PROFILE}}"'
+      - '{{.RUN_SCRIPT}} scripts/backend/doctor.sh "{{.PROFILE}}"'
 
   package:
     desc: Produce local packages for one target (TARGET=server|web|desktop)
     vars:
       TARGET: '{{default "server" .TARGET}}'
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/package.sh "{{.TARGET}}" "{{.PROFILE}}"'
+      - '{{.RUN_SCRIPT}} scripts/backend/package.sh "{{.TARGET}}" "{{.PROFILE}}"'
 
   release:
     desc: Run the local, non-publishing release preflight
     requires:
       vars: [VERSION]
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/release.sh preflight "{{.VERSION}}"'
+      - '{{.RUN_SCRIPT}} scripts/backend/release.sh preflight "{{.VERSION}}"'
 
   release:verify:
     desc: Verify all local release policies and manifest contracts
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/release.sh verify'
+      - '{{.RUN_SCRIPT}} scripts/backend/release.sh verify'
 
   governance:check:
     desc: Verify that repository governance is owned only by the root
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/governance-check.sh'
+      - '{{.RUN_SCRIPT}} scripts/backend/governance-check.sh'
 
   architecture:check:
     desc: Verify canonical backend, frontend, command, and workspace boundaries
@@ -110,21 +110,21 @@ tasks:
   task:contract:
     desc: Verify the public task and failure-propagation contract
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/task-contract.sh'
+      - '{{.RUN_SCRIPT}} scripts/backend/task-contract.sh'
 
   lint:staged:
     desc: Run the repository pre-commit checks
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/lint-staged.sh'
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus-ui/lint-staged.sh'
+      - '{{.RUN_SCRIPT}} scripts/backend/lint-staged.sh'
+      - '{{.RUN_SCRIPT}} scripts/frontend/lint-staged.sh'
 
   task:failure-probe:
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/failure-probe.sh'
+      - '{{.RUN_SCRIPT}} scripts/backend/failure-probe.sh'
 
   release:preflight:
     internal: true
     requires:
       vars: [VERSION]
     cmds:
-      - '{{.RUN_SCRIPT}} scripts/go-admin-plus/release.sh preflight "{{.VERSION}}"'
+      - '{{.RUN_SCRIPT}} scripts/backend/release.sh preflight "{{.VERSION}}"'

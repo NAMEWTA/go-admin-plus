@@ -2,10 +2,10 @@ services:
   api-postgres:
     command:
       - --profile=server-postgres
-      - --config=/run/config/server-postgres.json
+      - --config=/run/config/server-postgres.yaml
       - --data-root=/var/lib/go-admin-plus
   api-sqlite:
     command:
       - --profile=server-sqlite
-      - --config=/run/config/server-sqlite.json
+      - --config=/run/config/server-sqlite.yaml
       - --data-root=/var/lib/go-admin-plus

@@ -65,12 +65,12 @@ const closeSession = async session => {
 }
 const loginIfRequired = async session => {
   await poll('login or restored workspace', () => execute(session, `
-    return Boolean(document.querySelector('form[aria-label="Sign in"]') || document.querySelector('nav[aria-label="主导航"]'))
+    return Boolean(document.querySelector('form[aria-label="登录"]') || document.querySelector('nav[aria-label="主导航"]'))
   `))
-  const loginVisible = await execute(session, 'return Boolean(document.querySelector(\'form[aria-label="Sign in"]\'))')
+  const loginVisible = await execute(session, 'return Boolean(document.querySelector(\'form[aria-label="登录"]\'))')
   if (!loginVisible) return false
   await execute(session, `
-    const form = document.querySelector('form[aria-label="Sign in"]')
+    const form = document.querySelector('form[aria-label="登录"]')
     const username = form?.querySelector('input[autocomplete="username"]')
     const password = form?.querySelector('input[autocomplete="current-password"]')
     if (!form || !username || !password) return false
@@ -84,26 +84,28 @@ const loginIfRequired = async session => {
   await poll('authenticated workspace', () => execute(session, 'return Boolean(document.querySelector(\'nav[aria-label="主导航"]\'))'))
   return true
 }
-const openProducts = async session => {
-  await poll('Demo products navigation', () => execute(session, `
-    const button = [...document.querySelectorAll('nav[aria-label="主导航"] button')].find(value => value.textContent?.trim() === 'Demo products')
+const openRoles = async session => {
+  await poll('角色管理导航', () => execute(session, `
+    const button = [...document.querySelectorAll('nav[aria-label="主导航"] button')].find(value => value.textContent?.trim() === '角色管理')
     if (!button) return false
     button.click()
     return true
   `))
-  await poll('Products page', () => execute(session, 'return Boolean(document.querySelector(\'#demo-products-title\'))'))
+  await poll('角色列表', () => execute(session, "return Boolean(document.querySelector('#roles-heading'))"))
 }
 
 let activeSession
 try {
   await waitForDriver()
-  const sku = `WIN-${Date.now()}`
+  const roleKey = `win-${Date.now()}`
   activeSession = await createSession()
   if (!await loginIfRequired(activeSession)) throw new Error('first installed launch unexpectedly restored a prior session')
-  await openProducts(activeSession)
+  await openRoles(activeSession)
+  await execute(activeSession, `document.querySelector('[data-testid="open-create-role"]')?.click()`)
+  await poll('新增角色表单', () => execute(activeSession, `return Boolean(document.querySelector('[data-testid="create-role"]'))`))
   const submitted = await execute(activeSession, `
-    const form = document.querySelector('.demo-products__form')
-    const values = { sku: arguments[0], name: 'Windows release tracer', description: 'Installed Tauri NSIS', priceCents: '1250', status: 'active' }
+    const form = document.querySelector('[data-testid="create-role"]')
+    const values = { key: arguments[0], name: 'Windows 安装验收', dataScope: 'self' }
     if (!form) return false
     for (const [name, value] of Object.entries(values)) {
       const control = form.querySelector('[name="' + name + '"]')
@@ -113,26 +115,26 @@ try {
     }
     form.requestSubmit()
     return true
-  `, [sku])
-  if (!submitted) throw new Error('installed product form is incomplete')
-  await poll('created product', () => execute(activeSession, 'return document.querySelector(\'tbody\')?.textContent?.includes(arguments[0]) === true', [sku]))
+  `, [roleKey])
+  if (!submitted) throw new Error('installed role form is incomplete')
+  await poll('created role', () => execute(activeSession, 'return document.querySelector(\'tbody\')?.textContent?.includes(arguments[0]) === true', [roleKey]))
   await closeSession(activeSession)
   activeSession = undefined
 
   activeSession = await createSession()
   await loginIfRequired(activeSession)
-  await openProducts(activeSession)
-  await poll('persisted product after restart', () => execute(activeSession, 'return document.querySelector(\'tbody\')?.textContent?.includes(arguments[0]) === true', [sku]))
+  await openRoles(activeSession)
+  await poll('persisted role after restart', () => execute(activeSession, 'return document.querySelector(\'tbody\')?.textContent?.includes(arguments[0]) === true', [roleKey]))
   const deleted = await execute(activeSession, `
     window.confirm = () => true
     const row = [...document.querySelectorAll('tbody tr')].find(value => value.textContent?.includes(arguments[0]))
-    const button = row && [...row.querySelectorAll('button')].find(value => value.textContent?.trim() === 'Delete')
+    const button = row?.querySelector('button[data-action="delete"]')
     if (!button) return false
     button.click()
     return true
-  `, [sku])
-  if (!deleted) throw new Error('persisted product could not be deleted')
-  await poll('deleted product', () => execute(activeSession, 'return document.querySelector(\'tbody\')?.textContent?.includes(arguments[0]) !== true', [sku]))
+  `, [roleKey])
+  if (!deleted) throw new Error('persisted role could not be deleted')
+  await poll('deleted role', () => execute(activeSession, 'return document.querySelector(\'tbody\')?.textContent?.includes(arguments[0]) !== true', [roleKey]))
   await closeSession(activeSession)
   activeSession = undefined
 

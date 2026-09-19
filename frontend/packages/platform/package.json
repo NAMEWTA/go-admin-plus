@@ -1,0 +1,15 @@
+{
+  "name": "@go-admin-plus/platform",
+  "version": "0.0.3",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}

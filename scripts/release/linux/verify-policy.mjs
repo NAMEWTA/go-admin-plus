@@ -66,8 +66,8 @@ export async function verifyRepository(repository) {
     read('scripts/release/linux/build-images.sh'),
     read('scripts/release/linux/emit-artifacts.sh'),
     read('release/linux/identity.json'),
-    read('deploy/compose/config/server-postgres.json'),
-    read('deploy/compose/config/server-sqlite.json'),
+    read('deploy/compose/config/server-postgres.yaml'),
+    read('deploy/compose/config/server-sqlite.yaml'),
     read('release/linux/go-admin-plus-server.service'),
     read('scripts/release/linux/build-service.sh'),
     read('release/linux/SERVER-INSTALL.md')
@@ -76,9 +76,9 @@ export async function verifyRepository(repository) {
   verifyContainerfile(server)
   verifyContainerfile(web)
   assert.match(server, /go build -trimpath -buildvcs=false/)
-  assert.doesNotMatch(server, /pnpm --dir go-admin-plus-ui install/)
+  assert.doesNotMatch(server, /pnpm --dir frontend install/)
   assert.doesNotMatch(server, /git init --quiet/)
-  assert.doesNotMatch(server, /\/opt\/go-admin-plus\/repository/)
+  assert.doesNotMatch(server, /\/opt\/backend\/repository/)
   assert.match(build, /release\/linux\/Containerfile\.server/)
   assert.match(build, /release\/linux\/Containerfile\.web/)
   assert.match(failure, /--profile=server-postgres/)
@@ -92,14 +92,14 @@ export async function verifyRepository(repository) {
   assert.match(serviceScript, /go-admin-plus-server-postgres\.service/)
   assert.match(install, /systemctl enable --now/)
   verifyIdentity(JSON.parse(identityText))
-  const postgres = JSON.parse(postgresConfig)
-  const sqlite = JSON.parse(sqliteConfig)
-  assert.equal(postgres.profile, 'server-postgres')
-  assert.equal(sqlite.profile, 'server-sqlite')
-  assert.equal(Object.hasOwn(postgres, 'database'), false)
-  assert.equal(sqlite.database.path, '/var/lib/go-admin-plus/database.sqlite3')
+  assert.match(postgresConfig, /database:\s*\n\s+driver: postgres/)
+  assert.match(postgresConfig, /dsnFile: \/run\/secrets\/database_dsn/)
+  assert.match(postgresConfig, /runtime:\s*\n\s+role: api/)
+  assert.match(sqliteConfig, /database:\s*\n\s+driver: sqlite/)
+  assert.match(sqliteConfig, /path: database\.sqlite3/)
+  assert.match(sqliteConfig, /dataDir: \/var\/lib\/go-admin-plus/)
   for (const text of [postgresConfig, sqliteConfig]) {
-    assert.doesNotMatch(text, /"(?:dsn|password|token|secret)"\s*:/i)
+    assert.doesNotMatch(text, /^\s*(?:dsn|password|token|secret):/im)
   }
 }
 

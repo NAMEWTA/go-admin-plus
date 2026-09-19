@@ -5,7 +5,7 @@ description: Develop or review the Go Admin Plus backend, including product comp
 
 # Backend Development
 
-Use this skill for changes under `go-admin-plus/`, `contracts/openapi/`, backend tests and backend
+Use this skill for changes under `backend/`, `contracts/openapi/`, backend tests and backend
 release/deployment integration. Read the repository `AGENTS.md`, the Speculo workspace/config files,
 and [repository architecture](../../../docs/repository-architecture.md) before making a structural
 change.
@@ -13,9 +13,9 @@ change.
 ## Current topology
 
 ```text
-go-admin-plus/
+backend/
   cmd/
-    go-admin-plus/       Server and bootstrap/recovery CLI
+    server/             Server and bootstrap/recovery CLI
     desktop-sidecar/     Tauri-managed local SQLite process
   internal/
     app/adapters/         Product-to-module ports and adapters
@@ -23,7 +23,7 @@ go-admin-plus/
     application/          Module contract and lifecycle orchestration
     contracts/            Generated transport contracts and capability types
     host/                 Server/Desktop process hosts and readiness
-    modules/              iam, audit, scheduler, files and demo
+    modules/              iam, audit, scheduler and files
     platform/             config, database, migrations, logging, outbox and coordination
   test/                   Cross-module, dialect, E2E harness and reliability tests
 ```
@@ -64,9 +64,8 @@ CLI/host -> product.Build or BuildPrepared
   ownership, lease, retry and cancellation explicit.
 - Logs must be structured and redacted. Never record passwords, secret-file contents, DSNs, session or
   CSRF tokens, request bodies or raw credentials.
-- Server profiles are `server-sqlite` and `server-postgres`; Desktop is `desktop-sqlite`. PostgreSQL
-  migration is an explicit offline operation. SQLite/desktop migration behavior follows the profile
-  contract and readiness must reject schema mismatch.
+- Server profiles are `server-sqlite` and `server-postgres`; Desktop is `desktop-sqlite`. Server migration is an explicit offline operation for both dialects. Local Desktop backs up and migrates SQLite; remote Desktop connects by HTTPS without a sidecar. Readiness rejects schema mismatch.
+- Public server configuration is unified YAML; optional Redis is display cache only, and files support local/S3 providers.
 
 ## Tests and gates
 

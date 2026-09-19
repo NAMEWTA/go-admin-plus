@@ -12,18 +12,18 @@ test('current repository satisfies canonical architecture', () => {
 
 test('rejects the historical short Go module path', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  mkdirSync(join(root, 'go-admin-plus'), { recursive: true })
-  writeFileSync(join(root, 'go-admin-plus/go.mod'), 'module go-admin\n')
+  mkdirSync(join(root, 'backend'), { recursive: true })
+  writeFileSync(join(root, 'backend/go.mod'), 'module go-admin\n')
 
   assert.ok(checkArchitecture(root).includes(
-    'Go module path must be github.com/NAMEWTA/go-admin-plus/go-admin-plus'
+    'Go module path must be github.com/NAMEWTA/go-admin-plus/backend'
   ))
 })
 
 test('rejects the historical frontend workspace scope', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  mkdirSync(join(root, 'go-admin-plus-ui'), { recursive: true })
-  writeFileSync(join(root, 'go-admin-plus-ui/package.json'), '{"name":"@go-admin/workspace"}\n')
+  mkdirSync(join(root, 'frontend'), { recursive: true })
+  writeFileSync(join(root, 'frontend/package.json'), '{"name":"@go-admin/workspace"}\n')
 
   assert.ok(checkArchitecture(root).includes(
     'frontend workspace name must be @go-admin-plus/workspace'
@@ -32,16 +32,16 @@ test('rejects the historical frontend workspace scope', () => {
 
 test('rejects removed standalone backend command directories', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const commandRoot = join(root, 'go-admin-plus/cmd/config-check')
+  const commandRoot = join(root, 'backend/cmd/config-check')
   mkdirSync(commandRoot, { recursive: true })
   writeFileSync(join(commandRoot, 'main.go'), 'package main\n')
 
   assert.ok(checkArchitecture(root).includes(
-    'removed path still exists: go-admin-plus/cmd/config-check'
+    'removed path still exists: backend/cmd/config-check'
   ))
 })
 
-test('rejects stale SpecDev verification commands', () => {
+test('does not treat optional SpecDev runtime state as product architecture', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
   const configRoot = join(root, 'speculo/.speculo/specdev')
   const oldFrontend = ['go-admin-ui', 'plus'].join('-')
@@ -56,17 +56,14 @@ test('rejects stale SpecDev verification commands', () => {
   }))
 
   const failures = checkArchitecture(root)
-  assert.ok(failures.includes('SpecDev verification.test must be task test'))
-  assert.ok(failures.includes('SpecDev verification.typecheck must be pnpm --dir go-admin-plus-ui typecheck'))
-  assert.ok(failures.includes('SpecDev verification.lint must be task lint'))
-  assert.ok(failures.includes('SpecDev verification.build must be task build TARGET=all PROFILE=server-sqlite'))
+  assert.ok(!failures.some(message => message.includes('SpecDev')))
 })
 
 test('rejects command filters for nonexistent workspace packages', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  mkdirSync(join(root, 'go-admin-plus-ui/apps/admin-web'), { recursive: true })
-  writeFileSync(join(root, 'go-admin-plus-ui/package.json'), '{"name":"@go-admin-plus/workspace"}\n')
-  writeFileSync(join(root, 'go-admin-plus-ui/apps/admin-web/package.json'), '{"name":"@go-admin-plus/admin-web"}\n')
+  mkdirSync(join(root, 'frontend/apps/admin-web'), { recursive: true })
+  writeFileSync(join(root, 'frontend/package.json'), '{"name":"@go-admin-plus/workspace"}\n')
+  writeFileSync(join(root, 'frontend/apps/admin-web/package.json'), '{"name":"@go-admin-plus/admin-web"}\n')
   const unknownPackage = ['@go-admin-plus', 'missing'].join('/')
   writeFileSync(join(root, 'Taskfile.yml'), `pnpm --filter ${unknownPackage} build\n`)
 
@@ -77,7 +74,7 @@ test('rejects command filters for nonexistent workspace packages', () => {
 
 test('rejects a root typecheck command that can omit workspace package checks', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const workspaceRoot = join(root, 'go-admin-plus-ui')
+  const workspaceRoot = join(root, 'frontend')
   const packageRoot = join(workspaceRoot, 'packages/domains/audit')
   mkdirSync(packageRoot, { recursive: true })
   writeFileSync(join(workspaceRoot, 'package.json'), JSON.stringify({
@@ -100,7 +97,7 @@ test('rejects a root typecheck command that can omit workspace package checks', 
 
 test('rejects a workspace package without an independent typecheck contract', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const packageRoot = join(root, 'go-admin-plus-ui/packages/platform')
+  const packageRoot = join(root, 'frontend/packages/platform')
   mkdirSync(join(packageRoot, 'src'), { recursive: true })
   writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({
     name: '@go-admin-plus/platform'
@@ -114,7 +111,7 @@ test('rejects a workspace package without an independent typecheck contract', ()
 
 test('rejects a workspace package spec without an independent test contract', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const packageRoot = join(root, 'go-admin-plus-ui/packages/adapters/desktop')
+  const packageRoot = join(root, 'frontend/packages/adapters/desktop')
   mkdirSync(join(packageRoot, 'src'), { recursive: true })
   writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({
     name: '@go-admin-plus/adapter-desktop',
@@ -129,7 +126,7 @@ test('rejects a workspace package spec without an independent test contract', ()
 
 test('rejects a frontend test config that can omit workspace package specs', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const testRoot = join(root, 'go-admin-plus-ui/tests/shell')
+  const testRoot = join(root, 'frontend/tests/shell')
   mkdirSync(testRoot, { recursive: true })
   writeFileSync(join(testRoot, 'vitest.config.ts'), `export default {
     test: { include: ['packages/domains/iam/src/**/*.spec.ts'] }
@@ -142,7 +139,7 @@ test('rejects a frontend test config that can omit workspace package specs', () 
 
 test('rejects a frontend test config that omits E2E harness unit specs', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const testRoot = join(root, 'go-admin-plus-ui/tests/shell')
+  const testRoot = join(root, 'frontend/tests/shell')
   mkdirSync(testRoot, { recursive: true })
   writeFileSync(join(testRoot, 'vitest.config.ts'), `export default {
     test: { include: ['packages/**/*.spec.ts'] }
@@ -155,7 +152,7 @@ test('rejects a frontend test config that omits E2E harness unit specs', () => {
 
 test('rejects a frontend root test command that omits Node unit test discovery', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const workspaceRoot = join(root, 'go-admin-plus-ui')
+  const workspaceRoot = join(root, 'frontend')
   mkdirSync(workspaceRoot, { recursive: true })
   writeFileSync(join(workspaceRoot, 'package.json'), JSON.stringify({
     name: '@go-admin-plus/workspace',
@@ -172,7 +169,7 @@ test('rejects a frontend root test command that omits Node unit test discovery',
 
 test('rejects a root typecheck command that omits an E2E driver project', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const workspaceRoot = join(root, 'go-admin-plus-ui')
+  const workspaceRoot = join(root, 'frontend')
   const driverRoot = join(workspaceRoot, 'tests/e2e/audit')
   mkdirSync(driverRoot, { recursive: true })
   writeFileSync(join(workspaceRoot, 'package.json'), JSON.stringify({
@@ -190,7 +187,7 @@ test('rejects a root typecheck command that omits an E2E driver project', () => 
 
 test('rejects aggregate local frontend packaging', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const scriptRoot = join(root, 'scripts/go-admin-plus-ui')
+  const scriptRoot = join(root, 'scripts/frontend')
   mkdirSync(scriptRoot, { recursive: true })
   writeFileSync(join(scriptRoot, 'package.sh'), 'pnpm build:prod\n')
 
@@ -201,7 +198,7 @@ test('rejects aggregate local frontend packaging', () => {
 
 test('rejects a Desktop build that compiles only WebView assets', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const scriptRoot = join(root, 'scripts/go-admin-plus-ui')
+  const scriptRoot = join(root, 'scripts/frontend')
   mkdirSync(scriptRoot, { recursive: true })
   writeFileSync(join(scriptRoot, 'build.sh'), 'pnpm build:prod\n')
 
@@ -257,19 +254,19 @@ test('rejects optional or incomplete PostgreSQL and supply-chain CI jobs', () =>
 
 test('rejects frontend task scripts that bypass managed pnpm resolution', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
-  const scriptRoot = join(root, 'scripts/go-admin-plus-ui')
+  const scriptRoot = join(root, 'scripts/frontend')
   mkdirSync(scriptRoot, { recursive: true })
   writeFileSync(join(scriptRoot, 'test.sh'), 'exec pnpm test\n')
 
   assert.ok(checkArchitecture(root).includes(
-    'frontend task script must use managed pnpm resolution: scripts/go-admin-plus-ui/test.sh'
+    'frontend task script must use managed pnpm resolution: scripts/frontend/test.sh'
   ))
 })
 
 test('rejects an unpinned root command toolchain and incomplete setup docs', () => {
   const root = mkdtempSync(join(tmpdir(), 'go-admin-architecture-'))
   const workflowRoot = join(root, '.github/workflows')
-  const scriptRoot = join(root, 'scripts/go-admin-plus')
+  const scriptRoot = join(root, 'scripts/backend')
   const docsRoot = join(root, 'docs')
   mkdirSync(workflowRoot, { recursive: true })
   mkdirSync(scriptRoot, { recursive: true })

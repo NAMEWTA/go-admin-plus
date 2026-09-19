@@ -1,14 +1,7 @@
-# macOS Apple Silicon Release
+# macOS 桌面发行
 
-`identity.json` is the canonical bundle identity, minimum system version, target architecture, and
-artifact evidence contract. Release artifacts target the latest Apple Silicon (`aarch64-apple-darwin`)
-only; Intel macOS builds are not published.
+`identity.json` 定义产品标识、最低系统版本与两种目标架构：Apple Silicon arm64 和 Intel x64。对应 runner 分别构建 app/DMG。当前发行用于个人使用，不签名、不公证。
 
-The app and DMG are intentionally unsigned and not notarized for private self-use. macOS may show
-an unsigned-app warning; on a machine you control, allow the app through the normal System Settings
-security flow.
+应用安装目录只保存程序；SQLite、文件、备份及凭证保险库位于 `~/Library/Application Support/com.goadmin.plus/data`，日志位于 `~/Library/Logs/com.goadmin.plus`。替换应用前停止程序并备份数据。
 
-Drag `Go Admin Plus.app` from the DMG to a directory you choose. Runtime data is stored inside the
-selected bundle at `<install-directory>/Go Admin Plus.app/data/` and logs at
-`<install-directory>/Go Admin Plus.app/logs/`. Back up both directories before replacing the
-application bundle.
+首次启动可选择本地 SQLite 或远程 HTTPS，两种数据独立。详细操作见 [INSTALL.md](INSTALL.md)。

@@ -5,9 +5,9 @@ It binds the product version, source SHA, OpenAPI digest, migration version, sup
 targets, and the explicit unsigned self-use policy.
 
 ```bash
-node release/manifest/product-release.mjs preflight --version 0.0.2 --root-ref "$(git rev-parse HEAD)"
+node release/manifest/product-release.mjs preflight --version 0.0.3 --root-ref "$(git rev-parse HEAD)"
 node --test release/manifest/product-release.test.mjs
 ```
 
 The manifest does not sign, notarize, publish, or deploy anything. GitHub Actions creates the public
-Release after the Linux service, macOS ARM64, and Windows x64 jobs have all completed successfully.
+Release after the Linux service, Linux x64 desktop, macOS arm64/x64, and Windows x64 jobs have all completed successfully.

@@ -11,14 +11,14 @@ export const images = Object.freeze({
 })
 
 export const securityPlan = root => {
-  const rustRoot = join(root, 'go-admin-plus-ui/apps/admin-desktop/src-tauri')
+  const rustRoot = join(root, 'frontend/apps/admin-desktop/src-tauri')
   return [
-    { name: 'govulncheck', command: 'govulncheck', args: ['./...'], cwd: join(root, 'go-admin-plus') },
-    { name: 'pnpm-production-audit', command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args: ['audit', '--prod', '--audit-level', 'high'], cwd: join(root, 'go-admin-plus-ui') },
+    { name: 'govulncheck', command: 'govulncheck', args: ['./...'], cwd: join(root, 'backend') },
+    { name: 'pnpm-production-audit', command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args: ['audit', '--prod', '--audit-level', 'high'], cwd: join(root, 'frontend') },
     { name: 'cargo-audit', command: 'cargo', args: ['audit'], cwd: rustRoot },
     { name: 'cargo-deny', command: 'cargo', args: ['deny', '--config', join(root, 'scripts/security/deny.toml'), 'check', 'bans', 'sources'], cwd: rustRoot },
     { name: 'secret-scan', command: 'docker', args: ['run', '--rm', '-v', `${root}:/repo`, images.gitleaks, 'detect', '--source=/repo', '--config=/repo/scripts/security/gitleaks.toml', '--no-banner', '--redact', '--report-format=json', '--report-path=/repo/artifacts/security/gitleaks.json'], cwd: root },
-    { name: 'sbom', command: 'docker', args: ['run', '--rm', '-v', `${root}:/repo`, images.syft, 'dir:/repo', '--exclude', './.git/**', '--exclude', './artifacts/**', '--exclude', './go-admin-plus-ui/apps/admin-desktop/src-tauri/target/**', '-o', 'cyclonedx-json=/repo/artifacts/security/repository.cdx.json'], cwd: root },
+    { name: 'sbom', command: 'docker', args: ['run', '--rm', '-v', `${root}:/repo`, images.syft, 'dir:/repo', '--exclude', './.git/**', '--exclude', './artifacts/**', '--exclude', './frontend/apps/admin-desktop/src-tauri/target/**', '-o', 'cyclonedx-json=/repo/artifacts/security/repository.cdx.json'], cwd: root },
     { name: 'generate-drift', command: 'node', args: ['scripts/contracts/cli.mjs', 'generate', '--check'], cwd: root }
   ]
 }

@@ -12,8 +12,8 @@ test('generates Go and TypeScript transports for a module contract', () => {
   const outputRoot = mkdtempSync(join(tmpdir(), 'go-admin-module-generation-'))
   try {
     const outputs = generate(outputRoot, [join(directory, 'fixtures', 'valid-module.yaml')])
-    const goOutput = join('go-admin-plus', 'internal', 'modules', 'contract-fixture', 'transport', 'openapi.gen.go')
-    const typescriptRoot = join('go-admin-plus-ui', 'packages', 'domains', 'contract-fixture', 'src', 'generated')
+    const goOutput = join('backend', 'internal', 'modules', 'contract-fixture', 'transport', 'openapi.gen.go')
+    const typescriptRoot = join('frontend', 'packages', 'domains', 'contract-fixture', 'src', 'generated')
 
     assert.ok(outputs.includes(goOutput))
     assert.ok(outputs.includes(join(typescriptRoot, 'schema.ts')))

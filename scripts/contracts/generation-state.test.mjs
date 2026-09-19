@@ -56,7 +56,7 @@ test('detects and contracts outputs left by a removed module fragment', () => {
     assert.doesNotThrow(() => checkGeneration(outputRoot, []))
     assert.equal(existsSync(join(
       outputRoot,
-      'go-admin-plus-ui/packages/domains/contract-fixture/src/generated/client.ts'
+      'frontend/packages/domains/contract-fixture/src/generated/client.ts'
     )), false)
   } finally {
     rmSync(outputRoot, { recursive: true, force: true })
@@ -69,14 +69,14 @@ test('detects and contracts orphaned module outputs when the fragment manifest i
     synchronizeGeneration(outputRoot, [fixture('valid-module.yaml')])
     rmSync(join(
       outputRoot,
-      'go-admin-plus/internal/modules/contract-fixture/transport/openapi.manifest.json'
+      'backend/internal/modules/contract-fixture/transport/openapi.manifest.json'
     ))
 
     assert.throws(() => checkGeneration(outputRoot, []), /openapi\.gen\.go|drift/i)
     synchronizeGeneration(outputRoot, [])
     assert.equal(existsSync(join(
       outputRoot,
-      'go-admin-plus-ui/packages/domains/contract-fixture/src/generated/client.ts'
+      'frontend/packages/domains/contract-fixture/src/generated/client.ts'
     )), false)
   } finally {
     rmSync(outputRoot, { recursive: true, force: true })
@@ -95,7 +95,7 @@ test('keeps the shared manifest stable when module fragments are added', () => {
     assert.equal(readFileSync(sharedManifest, 'utf8'), canonical)
     assert.ok(existsSync(join(
       outputRoot,
-      'go-admin-plus/internal/modules/contract-fixture/transport/openapi.manifest.json'
+      'backend/internal/modules/contract-fixture/transport/openapi.manifest.json'
     )))
   } finally {
     rmSync(outputRoot, { recursive: true, force: true })
@@ -119,8 +119,8 @@ test('rejects a manifest path outside the generated owner grammar without deleti
   try {
     synchronizeGeneration(outputRoot, [])
     const unmanagedPaths = [
-      'go-admin-plus-ui/packages/domains/iam/manual/generated/client.ts',
-      'go-admin-plus/internal/modules/transport/openapi.gen.go'
+      'frontend/packages/domains/iam/manual/generated/client.ts',
+      'backend/internal/modules/transport/openapi.gen.go'
     ]
     for (const path of unmanagedPaths) {
       const unmanaged = join(outputRoot, path)
@@ -148,10 +148,10 @@ test('rejects a module manifest that claims a sibling slice output', () => {
     synchronizeGeneration(outputRoot, [fixture('valid-nested-module.yaml')])
     const manifestPath = join(
       outputRoot,
-      'go-admin-plus/internal/modules/iam/session_v2/transport/openapi.manifest.json'
+      'backend/internal/modules/iam/session_v2/transport/openapi.manifest.json'
     )
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-    manifest.outputs[3] = 'go-admin-plus-ui/packages/domains/iam/src/administration/generated/client.ts'
+    manifest.outputs[3] = 'frontend/packages/domains/iam/src/administration/generated/client.ts'
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
     assert.throws(
@@ -169,7 +169,7 @@ test('rejects a symbolic-link output ancestor without writing outside the output
   try {
     const sentinel = join(outsideRoot, 'sentinel.txt')
     writeFileSync(sentinel, 'preserve outside data')
-    const modulesRoot = join(outputRoot, 'go-admin-plus', 'internal', 'modules')
+    const modulesRoot = join(outputRoot, 'backend', 'internal', 'modules')
     mkdirSync(modulesRoot, { recursive: true })
     symlinkSync(
       outsideRoot,

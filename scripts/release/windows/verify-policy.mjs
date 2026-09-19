@@ -21,6 +21,10 @@ export function verifyIdentity(identity) {
     preserveCredential: true,
     removeInstallDirectory: true
   })
+  assert.deepEqual(identity.dataPaths, {
+    data: '%LOCALAPPDATA%\\com.goadmin.plus\\data',
+    logs: '%LOCALAPPDATA%\\com.goadmin.plus\\logs'
+  })
   assert.equal(identity.remotePublish, false)
   assert.deepEqual(identity.evidence, ['SHA256SUMS', 'SPDX JSON', 'provenance.json', 'install-evidence.json'])
 }
@@ -40,8 +44,8 @@ export async function verifyRepository(repository) {
   const read = relative => readFile(path.join(repository, relative), 'utf8')
   const [identityText, tauriText, runtime, builder, verifier, installer, artifacts, workflow] = await Promise.all([
     read('release/windows/identity.json'),
-    read('go-admin-plus-ui/apps/admin-desktop/src-tauri/tauri.conf.json'),
-    read('go-admin-plus-ui/apps/admin-desktop/src-tauri/src/main.rs'),
+    read('frontend/apps/admin-desktop/src-tauri/tauri.conf.json'),
+    read('frontend/apps/admin-desktop/src-tauri/src/main.rs'),
     read('scripts/release/windows/build-nsis.ps1'),
     read('scripts/release/windows/verify-artifacts.ps1'),
     read('scripts/release/windows/verify-install.ps1'),
@@ -52,14 +56,14 @@ export async function verifyRepository(repository) {
   const tauri = JSON.parse(tauriText)
   verifyIdentity(identity)
   assert.equal(tauri.identifier, identity.bundleIdentifier)
-  assert.match(runtime, /current_exe\(\)/)
+  assert.match(runtime, /app_local_data_dir\(\)/)
   assert.match(builder, /x86_64-pc-windows-msvc/)
   assert.match(builder, /installMode = 'currentUser'/)
   assert.doesNotMatch(builder, /signCommand|artifact-signing|AZURE_/i)
   assert.match(verifier, /Assert-X64Pe/)
   assert.doesNotMatch(verifier, /Authenticode|SignerCertificate|thumbprint/i)
   assert.match(installer, /installDirectory = Join-Path \$env:RUNNER_TEMP/)
-  assert.match(installer, /dataRoot = Join-Path \$installDirectory 'data'/)
+  assert.match(installer, /dataRoot = Join-Path \$env:LOCALAPPDATA/)
   assert.match(installer, /installPathSelected = \$true/)
   assert.match(artifacts, /releaseClass = 'private-release'/)
   assert.doesNotMatch(artifacts, /Authenticode|signing|thumbprint/i)

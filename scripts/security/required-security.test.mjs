@@ -17,7 +17,7 @@ test('declares every required security and drift step without allow-failure synt
   assert.deepEqual(plan.find(step => step.name === 'cargo-deny').args, ['deny', '--config', join('/repo', 'scripts/security/deny.toml'), 'check', 'bans', 'sources'])
   assert.ok(plan.find(step => step.name === 'secret-scan').args.includes('--config=/repo/scripts/security/gitleaks.toml'))
   assert.ok(!plan.find(step => step.name === 'secret-scan').args.includes('--no-git'))
-  for (const path of ['./.git/**', './artifacts/**', './go-admin-plus-ui/apps/admin-desktop/src-tauri/target/**']) {
+  for (const path of ['./.git/**', './artifacts/**', './frontend/apps/admin-desktop/src-tauri/target/**']) {
     assert.ok(plan.find(step => step.name === 'sbom').args.includes(path))
   }
   assert.doesNotMatch(JSON.stringify(plan), /\|\| true|continue-on-error/)

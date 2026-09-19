@@ -5,7 +5,7 @@ description: Develop or review the Go Admin Plus Vue 3 frontend, including headl
 
 # Frontend Development
 
-Use this skill for changes under `go-admin-plus-ui/`, frontend tests and Web/Desktop composition.
+Use this skill for changes under `frontend/`, frontend tests and Web/Desktop composition.
 Read the repository `AGENTS.md`, Speculo workspace/config files, and
 [repository architecture](../../../docs/repository-architecture.md) before changing package
 boundaries or runtime behavior.
@@ -13,7 +13,7 @@ boundaries or runtime behavior.
 ## Current topology
 
 ```text
-go-admin-plus-ui/
+frontend/
   apps/
     admin-web/            Vite browser application
     admin-desktop/        Vite app plus Tauri 2/Rust host
@@ -70,11 +70,11 @@ Cover domain normalization/validation, client error mapping, controller races an
 visibility, dialog reset, cancellation and successful mutation. Run:
 
 ```text
-pnpm --dir go-admin-plus-ui lint
-pnpm --dir go-admin-plus-ui typecheck
-pnpm --dir go-admin-plus-ui test
-pnpm --dir go-admin-plus-ui check:workspace
-pnpm --dir go-admin-plus-ui build
+pnpm --dir frontend lint
+pnpm --dir frontend typecheck
+pnpm --dir frontend test
+pnpm --dir frontend check:workspace
+pnpm --dir frontend build
 task architecture:check
 task compatibility:zero
 ```

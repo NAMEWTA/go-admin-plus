@@ -1,0 +1,1186 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Scheduler API",
+    "version": "1.0.0",
+    "description": "Controlled registered task definitions and execution history.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "security": [
+    {
+      "SessionCookie": []
+    }
+  ],
+  "paths": {
+    "/scheduler/task-types": {
+      "get": {
+        "operationId": "listSchedulerTaskTypes",
+        "summary": "List compile-time registered task types",
+        "responses": {
+          "200": {
+            "description": "Registered task descriptors.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "maxItems": 128,
+                  "items": {
+                    "$ref": "#/components/schemas/TaskType"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/scheduler/definitions": {
+      "get": {
+        "operationId": "listSchedulerDefinitions",
+        "summary": "List task definitions",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Definition page.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DefinitionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSchedulerDefinition",
+        "summary": "Create a disabled task definition",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefinitionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created definition.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/scheduler/definitions/{definitionId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DefinitionId"
+        }
+      ],
+      "patch": {
+        "operationId": "updateSchedulerDefinition",
+        "summary": "Update a stopped task definition",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDefinitionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated definition.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteSchedulerDefinition",
+        "summary": "Stop and tombstone a task definition",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Revision"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Definition deleted.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/scheduler/definitions/{definitionId}/run": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DefinitionId"
+        }
+      ],
+      "post": {
+        "operationId": "runSchedulerDefinition",
+        "summary": "Queue one execution of a registered task",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Execution queued.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "executionId"
+                  ],
+                  "properties": {
+                    "executionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/scheduler/definitions/{definitionId}/enable": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DefinitionId"
+        }
+      ],
+      "post": {
+        "operationId": "enableSchedulerDefinition",
+        "summary": "Enable a task definition from its next UTC occurrence",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Enabled definition.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/scheduler/definitions/{definitionId}/stop": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/DefinitionId"
+        }
+      ],
+      "post": {
+        "operationId": "stopSchedulerDefinition",
+        "summary": "Stop a task definition at the row-lock linearization point",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stopped definition.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Definition"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/scheduler/executions": {
+      "get": {
+        "operationId": "listSchedulerExecutions",
+        "summary": "List redacted execution history",
+        "parameters": [
+          {
+            "name": "definitionId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ExecutionStatus"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Execution page.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-go-admin-session",
+        "description": "Opaque server-side session identifier. JavaScript cannot read the production cookie."
+      },
+      "CsrfToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "description": "Per-session anti-forgery token required for state-changing Web requests."
+      }
+    },
+    "parameters": {
+      "DefinitionId": {
+        "name": "definitionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "Revision": {
+        "name": "revision",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "headers": {
+      "CsrfToken": {
+        "description": "Current anti-forgery token.",
+        "schema": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43
+        }
+      },
+      "SetCookie": {
+        "description": "Replacement session cookie.",
+        "schema": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      }
+    },
+    "schemas": {
+      "ParameterKind": {
+        "type": "string",
+        "enum": [
+          "string",
+          "integer",
+          "boolean"
+        ]
+      },
+      "ParameterField": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "label",
+          "kind",
+          "required"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][A-Za-z0-9]{0,63}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ParameterKind"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "minimum": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "maximum": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "allowedValues": {
+            "type": "array",
+            "maxItems": 64,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        }
+      },
+      "TaskType": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "label",
+          "fields"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]{2,126}$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "fields": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/ParameterField"
+            }
+          }
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cron",
+          "timezone"
+        ],
+        "properties": {
+          "cron": {
+            "type": "string",
+            "minLength": 9,
+            "maxLength": 256,
+            "description": "标准五段 Cron 表达式"
+          },
+          "timezone": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Asia/Shanghai"
+          }
+        }
+      },
+      "ParameterValue": {
+        "oneOf": [
+          {
+            "type": "string",
+            "maxLength": 256
+          },
+          {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          {
+            "type": "boolean"
+          }
+        ]
+      },
+      "Parameters": {
+        "type": "object",
+        "maxProperties": 32,
+        "additionalProperties": {
+          "$ref": "#/components/schemas/ParameterValue"
+        }
+      },
+      "DefinitionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "taskType",
+          "schedule",
+          "parameters"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "taskType": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]{2,126}$"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/Parameters"
+          }
+        }
+      },
+      "UpdateDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "taskType",
+          "schedule",
+          "parameters",
+          "revision"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "taskType": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9.-]{2,126}$"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/Parameters"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "RevisionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revision"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "Definition": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "taskType",
+          "schedule",
+          "parameters",
+          "enabled",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "taskType": {
+            "type": "string"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/Schedule"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/Parameters"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "nextRunAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DefinitionPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rows",
+          "total"
+        ],
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Definition"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ExecutionStatus": {
+        "type": "string",
+        "enum": [
+          "succeeded",
+          "failed"
+        ]
+      },
+      "Execution": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "definitionId",
+          "definitionRevision",
+          "taskType",
+          "scheduledFor",
+          "startedAt",
+          "finishedAt",
+          "status",
+          "executorOwner"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "definitionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "definitionRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "taskType": {
+            "type": "string"
+          },
+          "scheduledFor": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ExecutionStatus"
+          },
+          "errorCode": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{2,63}$"
+          },
+          "executorOwner": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          }
+        }
+      },
+      "ExecutionPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rows",
+          "total"
+        ],
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Execution"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title",
+          "status",
+          "category",
+          "code",
+          "traceId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "Stable problem type identifier."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "validation",
+              "authentication",
+              "authorization",
+              "not_found",
+              "conflict",
+              "internal"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Safe client-facing context without infrastructure details."
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "traceId": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 64,
+            "pattern": "^[a-f0-9]+$"
+          },
+          "violations": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ValidationViolation"
+            }
+          }
+        }
+      },
+      "ValidationViolation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "rule"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "rule": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    "responses": {
+      "ValidationProblem": {
+        "description": "Request validation failed.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "AuthenticationProblem": {
+        "description": "Authentication is required.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "AuthorizationProblem": {
+        "description": "Authorization failed.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "NotFoundProblem": {
+        "description": "Resource was not found.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ConflictProblem": {
+        "description": "Resource conflicts with current state.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "InternalProblem": {
+        "description": "Internal failure.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-go-admin-module": "scheduler",
+  "x-go-admin-codegen": {
+    "owner": "scheduler",
+    "goPackage": "schedulertransport",
+    "goOutput": "backend/internal/modules/scheduler/transport/openapi.gen.go",
+    "typescriptOutput": "frontend/packages/domains/scheduler/src/generated"
+  }
+}

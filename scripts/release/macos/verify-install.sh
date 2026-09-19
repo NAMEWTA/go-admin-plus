@@ -11,11 +11,12 @@ sandbox=$(cd -- "$sandbox_created" && pwd -P)
 mountpoint="$sandbox/mount"
 mkdir -p -- "$mountpoint" "$sandbox/Applications" "$sandbox/tmp" "$evidence"
 install_root="$sandbox/Applications/Go Admin Plus.app"
-data_root="$install_root/data"
-log_root="$install_root/logs"
+data_root="$HOME/Library/Application Support/com.goadmin.plus/data"
+config_file="$HOME/Library/Application Support/com.goadmin.plus/connection.json"
+log_root="$HOME/Library/Logs/com.goadmin.plus"
 keyring_service=com.goadmin.plus.stronghold
 keyring_account=desktop-session-vault
-[[ ! -e "$data_root" && ! -e "$log_root" ]]
+[[ ! -e "$data_root" && ! -e "$log_root" && ! -e "$config_file" ]]
 if security find-generic-password -s "$keyring_service" -a "$keyring_account" >/dev/null 2>&1; then
   echo "desktop verification credential already exists" >&2
   exit 1
@@ -26,8 +27,9 @@ cleanup() {
   if [[ -n "$child" ]] && kill -0 "$child" 2>/dev/null; then kill "$child" 2>/dev/null || true; fi
   if [[ "$mounted" == true ]]; then hdiutil detach -quiet "$mountpoint" || true; fi
   security delete-generic-password -s "$keyring_service" -a "$keyring_account" >/dev/null 2>&1 || true
-  if [[ "$data_root" == "$install_root/data" && "$log_root" == "$install_root/logs" ]]; then
+  if [[ "$data_root" == "$HOME/Library/Application Support/com.goadmin.plus/data" && "$log_root" == "$HOME/Library/Logs/com.goadmin.plus" ]]; then
     rm -rf -- "$data_root" "$log_root"
+    rm -f -- "$config_file"
   fi
   rm -rf -- "$sandbox"
 }
@@ -56,6 +58,8 @@ launch_and_stop() {
   wait "$child" || true
   child=
 }
+mkdir -p -- "$(dirname -- "$config_file")"
+printf '%s\n' '{"mode":"local","serverUrl":"","caCertificate":""}' > "$config_file"
 launch_and_stop first-run
 database_identity=$(stat -f '%d:%i' "$data_root/go-admin-plus.db")
 launch_and_stop restart

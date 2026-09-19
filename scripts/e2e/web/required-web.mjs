@@ -6,13 +6,12 @@ import { fileURLToPath } from 'node:url'
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 
 export const suites = Object.freeze([
-  { name: 'product-shell', path: 'go-admin-plus-ui/tests/e2e/web-shell/run.mjs', require: 'GO_ADMIN_REQUIRE_WEB_SHELL_E2E', marker: 'WEB_SHELL_E2E_PASS profiles=sqlite,postgres' },
-  { name: 'iam-session', path: 'go-admin-plus-ui/tests/e2e/iam/session/run.mjs', require: 'GO_ADMIN_REQUIRE_IAM_E2E', marker: 'IAM_SESSION_E2E_PASS profiles=sqlite,postgres' },
-  { name: 'iam-administration', path: 'go-admin-plus-ui/tests/e2e/iam/administration/run.mjs', require: 'GO_ADMIN_REQUIRE_IAM_ADMIN_E2E', marker: 'IAM_ADMIN_E2E_PASS profiles=sqlite,postgres' },
-  { name: 'audit', path: 'go-admin-plus-ui/tests/e2e/audit/run.mjs', require: 'GO_ADMIN_REQUIRE_AUDIT_E2E', marker: 'AUDIT_E2E_PASS' },
-  { name: 'scheduler', path: 'go-admin-plus-ui/tests/e2e/scheduler/run.mjs', require: 'GO_ADMIN_REQUIRE_SCHEDULER_E2E', marker: 'SCHEDULER_E2E_PASS profiles=sqlite,postgres' },
-  { name: 'demo', path: 'go-admin-plus-ui/tests/e2e/demo/run.mjs', require: 'GO_ADMIN_REQUIRE_DEMO_E2E', marker: 'DEMO_E2E_PASS profiles=sqlite,postgres' },
-  { name: 'files', path: 'go-admin-plus-ui/tests/e2e/files/run.mjs', require: 'GO_ADMIN_REQUIRE_FILES_E2E', marker: 'FILES_E2E_PASS profiles=sqlite,postgres' },
+  { name: 'product-shell', path: 'frontend/tests/e2e/web-shell/run.mjs', require: 'GO_ADMIN_REQUIRE_WEB_SHELL_E2E', marker: 'WEB_SHELL_E2E_PASS profiles=sqlite,postgres' },
+  { name: 'iam-session', path: 'frontend/tests/e2e/iam/session/run.mjs', require: 'GO_ADMIN_REQUIRE_IAM_E2E', marker: 'IAM_SESSION_E2E_PASS profiles=sqlite,postgres' },
+  { name: 'iam-administration', path: 'frontend/tests/e2e/iam/administration/run.mjs', require: 'GO_ADMIN_REQUIRE_IAM_ADMIN_E2E', marker: 'IAM_ADMIN_E2E_PASS profiles=sqlite,postgres' },
+  { name: 'audit', path: 'frontend/tests/e2e/audit/run.mjs', require: 'GO_ADMIN_REQUIRE_AUDIT_E2E', marker: 'AUDIT_E2E_PASS' },
+  { name: 'scheduler', path: 'frontend/tests/e2e/scheduler/run.mjs', require: 'GO_ADMIN_REQUIRE_SCHEDULER_E2E', marker: 'SCHEDULER_E2E_PASS profiles=sqlite,postgres' },
+  { name: 'files', path: 'frontend/tests/e2e/files/run.mjs', require: 'GO_ADMIN_REQUIRE_FILES_E2E', marker: 'FILES_E2E_PASS profiles=sqlite,postgres' },
 ])
 
 const fail = message => {

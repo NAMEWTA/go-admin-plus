@@ -1,15 +1,15 @@
 # 仓库架构
 
-当前产品版本为 `0.0.2`。Go Server、Web App 和 Tauri 2 Desktop 共用同一产品组合，正式业务模块为
-IAM、Audit、Scheduler、Files、Demo。
+当前产品版本为 `0.0.3`。Go Server、Web App 和 Tauri 2 Desktop 共用同一产品组合，正式业务模块为
+IAM、Audit、Scheduler、Files。
 
 ## 后端
 
-`go-admin-plus/` 采用组合根、应用层、模块和平台能力分离的结构：
+`backend/` 采用组合根、应用层、模块和平台能力分离的结构：
 
 ```text
 cmd/
-  go-admin-plus/       Server 进程入口
+  backend/       Server 进程入口
   desktop-sidecar/     Tauri 管理的本地进程入口
   config-check/        配置预检入口
   migrate/             向前迁移入口
@@ -18,7 +18,7 @@ internal/
   application/         跨模块用例与应用协议
   contracts/           生成的传输合同
   host/                Server 宿主
-  modules/             iam、audit、scheduler、files、demo
+  modules/             iam、audit、scheduler、files
   platform/            config、database、migrations、coordination、outbox 等技术能力
 ```
 
@@ -26,11 +26,11 @@ internal/
 
 后端调用层级固定为 `CLI/host -> product composition root -> application lifecycle -> module service/transport -> repository/platform`。组合根负责构造模块、路由、迁移和 worker；应用层负责生命周期；模块 service 在事务内授权并通过 repository 访问存储；平台层只提供数据库、日志、outbox 和协调等技术能力。
 
-Go module 固定为 `github.com/NAMEWTA/go-admin-plus/go-admin-plus`，所有内部 import 使用该仓库路径，不保留重构前的短 module path。
+Go module 固定为 `github.com/NAMEWTA/go-admin-plus/backend`，所有内部 import 使用该仓库路径，不保留重构前的短 module path。
 
 ## 前端
 
-`go-admin-plus-ui/` 是 pnpm workspace：
+`frontend/` 是 pnpm workspace：
 
 ```text
 apps/

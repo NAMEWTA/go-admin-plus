@@ -21,13 +21,22 @@ const platforms = {
     sboms: [],
     signature: { type: 'none', required: false }
   },
-  macos: {
+  linux_desktop: {
     workflow: '.github/workflows/release.yml',
-    platforms: ['darwin/arm64'],
+    platforms: ['linux/amd64'],
     host: 'desktop',
     releaseClass: 'private-release',
     checksums: ['SHA256SUMS'],
-    sboms: ['go-admin-plus-macos-arm64.spdx.json'],
+    sboms: [],
+    signature: { type: 'none', required: false }
+  },
+  macos: {
+    workflow: '.github/workflows/release.yml',
+    platforms: ['darwin/arm64', 'darwin/amd64'],
+    host: 'desktop',
+    releaseClass: 'private-release',
+    checksums: ['SHA256SUMS'],
+    sboms: ['go-admin-plus-macos-arm64.spdx.json', 'go-admin-plus-macos-x64.spdx.json'],
     signature: { type: 'none', required: false }
   },
   windows: {
@@ -74,7 +83,7 @@ const walk = directory => readdirSync(directory, { withFileTypes: true }).flatMa
 })
 
 const migrationVersion = () => {
-  const versions = walk(join(ROOT, 'go-admin-plus/internal'))
+  const versions = walk(join(ROOT, 'backend/internal'))
     .filter(path => path.endsWith('.sql'))
     .map(path => basename(path).match(/^(\d+)_/)?.[1])
     .filter(Boolean)
@@ -85,12 +94,12 @@ const migrationVersion = () => {
 
 const sourceContract = version => {
   if (!VERSION_PATTERN.test(version)) fail('version must use numeric major.minor.patch format')
-  const tauri = JSON.parse(readFileSync(join(ROOT, 'go-admin-plus-ui/apps/admin-desktop/src-tauri/tauri.conf.json'), 'utf8'))
+  const tauri = JSON.parse(readFileSync(join(ROOT, 'frontend/apps/admin-desktop/src-tauri/tauri.conf.json'), 'utf8'))
   const macos = JSON.parse(readFileSync(join(ROOT, 'release/macos/identity.json'), 'utf8'))
   const windows = JSON.parse(readFileSync(join(ROOT, 'release/windows/identity.json'), 'utf8'))
   const linux = JSON.parse(readFileSync(join(ROOT, 'release/linux/identity.json'), 'utf8'))
   if (tauri.version !== version) fail(`version ${version} does not match Tauri product version ${tauri.version}`)
-  if (macos.releaseClass !== 'private-release' || macos.signingRequired || macos.notarizationRequired || JSON.stringify(macos.architectures) !== JSON.stringify(['arm64'])) fail('macOS ARM64 identity is incomplete')
+  if (macos.releaseClass !== 'private-release' || macos.signingRequired || macos.notarizationRequired || JSON.stringify(macos.architectures) !== JSON.stringify(['arm64', 'x86_64'])) fail('macOS identity is incomplete')
   if (windows.releaseClass !== 'private-release' || windows.signingRequired || windows.architecture !== 'x86_64') fail('Windows x64 identity is incomplete')
   if (JSON.stringify(linux.platforms) !== JSON.stringify(platforms.linux.platforms) ||
       JSON.stringify(linux.artifacts) !== JSON.stringify(['go-admin-plus-server'])) fail('Linux service identity is incomplete')

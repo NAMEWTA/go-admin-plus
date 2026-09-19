@@ -1,0 +1,757 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Files API",
+    "version": "1.0.0",
+    "description": "Authorized local file metadata and content lifecycle.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "security": [
+    {
+      "SessionCookie": []
+    }
+  ],
+  "paths": {
+    "/files/objects": {
+      "get": {
+        "operationId": "listFiles",
+        "summary": "List file metadata in the caller data scope",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/FileSort"
+            }
+          },
+          {
+            "name": "direction",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/SortDirection"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized metadata page.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "uploadFile",
+        "summary": "Stream one file into private local storage",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created file metadata.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "413": {
+            "$ref": "#/components/responses/ContentProblem"
+          },
+          "415": {
+            "$ref": "#/components/responses/ContentProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          },
+          "507": {
+            "$ref": "#/components/responses/CapacityProblem"
+          }
+        }
+      }
+    },
+    "/files/objects/batch-delete": {
+      "post": {
+        "operationId": "deleteFiles",
+        "summary": "Delete file metadata and content atomically from the public projection",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteFilesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Files accepted for durable deletion.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/files/objects/{fileId}": {
+      "get": {
+        "operationId": "getFileMetadata",
+        "summary": "Read one authorized metadata record",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File metadata.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/files/objects/{fileId}/content": {
+      "get": {
+        "operationId": "downloadFile",
+        "summary": "Stream content after a fresh authorization decision",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/FileId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized file content.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              },
+              "Content-Disposition": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "maxLength": 4096
+                }
+              },
+              "X-Content-Type-Options": {
+                "required": true,
+                "schema": {
+                  "type": "string",
+                  "const": "nosniff"
+                }
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-go-admin-session",
+        "description": "Opaque server-side session identifier. JavaScript cannot read the production cookie."
+      },
+      "CsrfToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "description": "Per-session anti-forgery token required for state-changing Web requests."
+      }
+    },
+    "parameters": {
+      "FileId": {
+        "name": "fileId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "headers": {
+      "CsrfToken": {
+        "description": "Stable anti-forgery token for the authenticated Session family.",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43,
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        }
+      },
+      "SetCookie": {
+        "description": "Replacement opaque session cookie when rotation occurs.",
+        "required": false,
+        "schema": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title",
+          "status",
+          "category",
+          "code",
+          "traceId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "Stable problem type identifier."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "validation",
+              "authentication",
+              "authorization",
+              "not_found",
+              "conflict",
+              "internal"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Safe client-facing context without infrastructure details."
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "traceId": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 64,
+            "pattern": "^[a-f0-9]+$"
+          },
+          "violations": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ValidationViolation"
+            }
+          }
+        }
+      },
+      "FileSort": {
+        "type": "string",
+        "enum": [
+          "name",
+          "sizeBytes",
+          "createdAt"
+        ],
+        "default": "createdAt"
+      },
+      "SortDirection": {
+        "type": "string",
+        "enum": [
+          "ascending",
+          "descending"
+        ],
+        "default": "descending"
+      },
+      "FileMetadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "originalName",
+          "mediaType",
+          "sizeBytes",
+          "sha256",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "originalName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "application/pdf",
+              "image/jpeg",
+              "image/png",
+              "text/plain"
+            ]
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "maximum": 1073741824
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "FilePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rows",
+          "total"
+        ],
+        "properties": {
+          "rows": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/FileMetadata"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "DeleteFileTarget": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revision"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        }
+      },
+      "DeleteFilesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "files"
+        ],
+        "properties": {
+          "files": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/DeleteFileTarget"
+            }
+          }
+        }
+      },
+      "ValidationViolation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "rule"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "rule": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      }
+    },
+    "responses": {
+      "ValidationProblem": {
+        "description": "Request validation failed.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "AuthenticationProblem": {
+        "description": "Authentication required.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "AuthorizationProblem": {
+        "description": "Authorization or CSRF failed.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "NotFoundProblem": {
+        "description": "File not found.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ConflictProblem": {
+        "description": "File state conflict.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ContentProblem": {
+        "description": "File content was rejected.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "CapacityProblem": {
+        "description": "Storage capacity is temporarily unavailable without exposing global or account usage.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "InternalProblem": {
+        "description": "Internal failure.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-go-admin-module": "files",
+  "x-go-admin-codegen": {
+    "owner": "files",
+    "goPackage": "filestransport",
+    "goOutput": "backend/internal/modules/files/transport/openapi.gen.go",
+    "typescriptOutput": "frontend/packages/domains/files/src/generated"
+  }
+}

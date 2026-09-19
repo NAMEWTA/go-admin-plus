@@ -10,8 +10,8 @@ x-go-admin-module: files
 x-go-admin-codegen:
   owner: files
   goPackage: filestransport
-  goOutput: go-admin-plus/internal/modules/files/transport/openapi.gen.go
-  typescriptOutput: go-admin-plus-ui/packages/domains/files/src/generated
+  goOutput: backend/internal/modules/files/transport/openapi.gen.go
+  typescriptOutput: frontend/packages/domains/files/src/generated
 security: [{SessionCookie: []}]
 paths:
   /files/objects:
@@ -122,7 +122,7 @@ components:
         id: {type: string, format: uuid}
         originalName: {type: string, minLength: 1, maxLength: 255}
         mediaType: {type: string, enum: [application/pdf, image/jpeg, image/png, text/plain]}
-        sizeBytes: {type: integer, format: int64, minimum: 0, maximum: 10485760}
+        sizeBytes: {type: integer, format: int64, minimum: 0, maximum: 1073741824}
         sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
         revision: {type: integer, format: int64, minimum: 1}
         createdAt: {type: string, format: date-time}

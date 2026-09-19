@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "outputs": [
+    "backend/internal/modules/iam/session/transport/openapi.gen.go",
+    "backend/internal/modules/iam/session/transport/openapi.json",
+    "backend/internal/modules/iam/session/transport/openapi.manifest.json",
+    "frontend/packages/domains/iam/src/session/generated/client.ts",
+    "frontend/packages/domains/iam/src/session/generated/schema.ts"
+  ]
+}

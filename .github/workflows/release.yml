@@ -54,8 +54,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go-admin-plus/go.mod
-          cache-dependency-path: go-admin-plus/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - name: Build Linux service packages
         shell: bash
         run: |
@@ -68,10 +68,35 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  macos:
-    name: macOS Apple Silicon ARM64
+  linux-desktop:
+    name: Linux x64 desktop
     needs: validate
-    runs-on: macos-15
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with: {go-version-file: backend/go.mod}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with: {node-version: 22.22.3}
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - run: corepack enable && corepack pnpm --dir frontend install --frozen-lockfile
+      - run: rustup toolchain install 1.96.0 --profile minimal && rustup default 1.96.0
+      - run: go -C backend mod download
+      - run: scripts/release/linux/build-desktop.sh "$RELEASE_VERSION" release-desktop-output
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with: {name: release-linux-desktop, path: release-desktop-output, if-no-files-found: error}
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    needs: validate
+    strategy:
+      matrix:
+        include:
+          - {runner: macos-15, arch: arm64, target: aarch64-apple-darwin}
+          - {runner: macos-15-intel, arch: x64, target: x86_64-apple-darwin}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -80,8 +105,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go-admin-plus/go.mod
-          cache-dependency-path: go-admin-plus/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 11.1.3
@@ -90,29 +115,29 @@ jobs:
         with:
           node-version: 22.22.3
           cache: pnpm
-          cache-dependency-path: go-admin-plus-ui/pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install workspace and ARM64 toolchain
         shell: bash
         run: |
           set -euo pipefail
-          test "$(uname -m)" = arm64
-          rustup target add aarch64-apple-darwin
-          pnpm --dir go-admin-plus-ui install --frozen-lockfile
-          go -C go-admin-plus mod download
+          echo "building $(uname -m)"
+          rustup target add "${{ matrix.target }}"
+          pnpm --dir frontend install --frozen-lockfile
+          go -C backend mod download
           brew install syft
       - name: Build and verify unsigned ARM64 app
         shell: bash
         run: |
           set -euo pipefail
-          scripts/release/macos/build-arm64.sh "$RELEASE_VERSION" "$GITHUB_RUN_NUMBER" "release-work/Go Admin Plus.app"
+          scripts/release/macos/build.sh "$RELEASE_VERSION" "$GITHUB_RUN_NUMBER" "release-work/Go Admin Plus.app"
           scripts/release/macos/verify-app.sh "release-work/Go Admin Plus.app" private-release
-          dmg=$(find go-admin-plus-ui/apps/admin-desktop/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -type f -name '*.dmg' -print -quit)
+          dmg=$(find frontend/apps/admin-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg -type f -name '*.dmg' -print -quit)
           test -n "$dmg"
           scripts/release/macos/verify-dmg.sh "$dmg"
           scripts/release/macos/emit-artifacts.sh "$RELEASE_VERSION" "$SOURCE_SHA" "release-work/Go Admin Plus.app" "$dmg" release-output
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-macos
+          name: release-macos-${{ matrix.arch }}
           path: release-output
           if-no-files-found: error
           retention-days: 7
@@ -134,8 +159,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go-admin-plus/go.mod
-          cache-dependency-path: go-admin-plus/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 11.1.3
@@ -144,16 +169,23 @@ jobs:
         with:
           node-version: 22.22.3
           cache: pnpm
-          cache-dependency-path: go-admin-plus-ui/pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install workspace and x64 Rust toolchain
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { throw 'Windows x64 runner required.' }
           rustup target add x86_64-pc-windows-msvc
-          pnpm --dir go-admin-plus-ui install --frozen-lockfile
-          go -C go-admin-plus mod download
+          pnpm --dir frontend install --frozen-lockfile
+          go -C backend mod download
           cargo install tauri-driver --version 2.0.6 --locked
+          $edge = Get-Item "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+          $edgeVersion = $edge.VersionInfo.ProductVersion
+          $driverDirectory = Join-Path $env:RUNNER_TEMP 'edge-driver'
+          $driverArchive = Join-Path $env:RUNNER_TEMP 'edge-driver.zip'
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$edgeVersion/edgedriver_win64.zip" -OutFile $driverArchive
+          Expand-Archive $driverArchive -DestinationPath $driverDirectory
+          $driverDirectory | Out-File -FilePath $env:GITHUB_PATH -Append
           $archive = Join-Path $env:RUNNER_TEMP 'syft.zip'
           Invoke-WebRequest -Uri 'https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_windows_amd64.zip' -OutFile $archive
           if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'fc5ffaeffb993576ece9c791da5a688fb2c8969a1479bbfe58583672c64da336') { throw 'Syft checksum mismatch.' }
@@ -175,10 +207,13 @@ jobs:
 
   publish:
     name: Publish GitHub Release
-    needs: [linux, macos, windows]
+    needs: [linux, linux-desktop, macos, windows]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
         with:
           pattern: release-*
@@ -201,4 +236,4 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "Go Admin Plus $RELEASE_VERSION" --generate-notes release-assets/*
+            --title "Go Admin Plus $RELEASE_VERSION" --notes-file "release/notes/$RELEASE_VERSION.md" release-assets/*

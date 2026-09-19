@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "outputs": [
-    "go-admin-plus-ui/packages/api-client/src/generated/client.ts",
-    "go-admin-plus-ui/packages/api-client/src/generated/schema.ts",
-    "go-admin-plus/internal/contracts/openapi.gen.go",
-    "go-admin-plus/internal/contracts/openapi.json",
+    "backend/internal/contracts/openapi.gen.go",
+    "backend/internal/contracts/openapi.json",
+    "frontend/packages/api-client/src/generated/client.ts",
+    "frontend/packages/api-client/src/generated/schema.ts",
     "scripts/contracts/generated/openapi.json"
   ]
 }

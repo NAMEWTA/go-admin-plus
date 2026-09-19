@@ -8,8 +8,8 @@ x-go-admin-module: replace-me
 x-go-admin-codegen:
   owner: replace-me
   goPackage: replacemetransport
-  goOutput: go-admin-plus/internal/modules/replace-me/transport/openapi.gen.go
-  typescriptOutput: go-admin-plus-ui/packages/domains/replace-me/src/generated
+  goOutput: backend/internal/modules/replace-me/transport/openapi.gen.go
+  typescriptOutput: frontend/packages/domains/replace-me/src/generated
 paths: {}
 components:
   schemas: {}

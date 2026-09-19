@@ -1,0 +1,20 @@
+{
+  "name": "@go-admin-plus/domain-audit",
+  "version": "0.0.3",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@go-admin-plus/api-client": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run src",
+    "typecheck": "tsc -p src/tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

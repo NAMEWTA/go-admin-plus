@@ -9,7 +9,7 @@ User=go-admin-plus
 Group=go-admin-plus
 WorkingDirectory=/var/lib/go-admin-plus
 EnvironmentFile=-/etc/go-admin-plus/server.env
-ExecStart=/opt/go-admin-plus/go-admin-plus-server serve --profile server-postgres --config /etc/go-admin-plus/server-postgres.json --data-root /var/lib/go-admin-plus
+ExecStart=/opt/go-admin-plus/go-admin-plus-server serve --profile server-postgres --config /etc/go-admin-plus/server-postgres.yaml --data-root /var/lib/go-admin-plus --with-worker=false
 Restart=on-failure
 RestartSec=5s
 NoNewPrivileges=true

@@ -1,18 +1,18 @@
 # syntax=docker/dockerfile:1.12
-ARG GO_BASE=golang:1.26.5-alpine3.23@sha256:622e56dbc11a8cfe87cafa2331e9a201877271cbff918af53d3be315f3da88cc
+ARG GO_BASE=golang:1.26.8-alpine3.23@sha256:b5d1247cedefe8bf6b123f727dba9405edb9e9d8721d183f16f565b2f669e40c
 ARG NODE_BASE=node:22.22.3-alpine3.23@sha256:968df39aedcea65eeb078fb336ed7191baf48f972b4479711397108be0966920
 
 FROM ${GO_BASE} AS server-build
 WORKDIR /src/go-admin-plus
-COPY go-admin-plus/go.mod go-admin-plus/go.sum ./
+COPY backend/go.mod backend/go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
-COPY go-admin-plus/ ./
+COPY backend/ ./
 ARG VERSION=0.0.0-dev
 ARG VCS_REF=unknown
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -buildvcs=false \
-      -ldflags="-s -w" -o /out/go-admin-plus ./cmd/go-admin-plus
+      -ldflags="-s -w" -o /out/go-admin-plus ./cmd/server
 RUN GOMODCACHE=/out/go-mod go mod download
 
 FROM ${NODE_BASE} AS runtime

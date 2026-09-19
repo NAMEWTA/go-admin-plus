@@ -10,13 +10,14 @@ import path from 'node:path'
 export const targets = Object.freeze({
   'aarch64-apple-darwin': { goos: 'darwin', goarch: 'arm64', extension: '' },
   'x86_64-apple-darwin': { goos: 'darwin', goarch: 'amd64', extension: '' },
+  'x86_64-unknown-linux-gnu': { goos: 'linux', goarch: 'amd64', extension: '' },
   'x86_64-pc-windows-msvc': { goos: 'windows', goarch: 'amd64', extension: '.exe' }
 })
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repository = path.resolve(scriptDirectory, '../../..')
-const goRoot = path.join(repository, 'go-admin-plus')
-const outputRoot = path.join(repository, 'go-admin-plus-ui/apps/admin-desktop/src-tauri/binaries')
+const goRoot = path.join(repository, 'backend')
+const outputRoot = path.join(repository, 'frontend/apps/admin-desktop/src-tauri/binaries')
 
 const run = (command, args, options = {}) => new Promise((resolve, reject) => {
   const child = spawn(command, args, { ...options, stdio: ['ignore', 'inherit', 'inherit'] })
@@ -135,6 +136,7 @@ export const parseBuildRequest = args => {
 export const hostTriple = (platform = process.platform, architecture = process.arch) => {
   if (platform === 'darwin' && architecture === 'arm64') return 'aarch64-apple-darwin'
   if (platform === 'darwin' && architecture === 'x64') return 'x86_64-apple-darwin'
+  if (platform === 'linux' && architecture === 'x64') return 'x86_64-unknown-linux-gnu'
   if (platform === 'win32' && architecture === 'x64') return 'x86_64-pc-windows-msvc'
   throw new Error('unsupported desktop host target')
 }

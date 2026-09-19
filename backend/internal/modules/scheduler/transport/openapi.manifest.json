@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "outputs": [
+    "backend/internal/modules/scheduler/transport/openapi.gen.go",
+    "backend/internal/modules/scheduler/transport/openapi.json",
+    "backend/internal/modules/scheduler/transport/openapi.manifest.json",
+    "frontend/packages/domains/scheduler/src/generated/client.ts",
+    "frontend/packages/domains/scheduler/src/generated/schema.ts"
+  ]
+}

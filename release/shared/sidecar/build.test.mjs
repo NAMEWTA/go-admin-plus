@@ -49,5 +49,5 @@ test('rejects arbitrary targets and extra arguments', () => {
   assert.throws(() => parseTargets(['--target', 'aarch64-unknown-linux-gnu']))
   assert.throws(() => parseTargets(['--all', '--target', 'aarch64-apple-darwin']))
   assert.throws(() => parseBuildRequest(['--native-e2e', '--all']))
-  assert.throws(() => hostTriple('linux', 'x64'))
+  assert.equal(hostTriple('linux', 'x64'), 'x86_64-unknown-linux-gnu')
 })

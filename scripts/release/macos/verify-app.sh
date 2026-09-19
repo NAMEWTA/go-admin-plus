@@ -20,5 +20,5 @@ test "$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$plist")" = 
 for binary in "$host" "$sidecar"; do
   [[ "$(file -b "$binary")" == *Mach-O* ]]
 done
-node "$repository/go-admin-plus-ui/apps/admin-desktop/scripts/verify-production.mjs" --files "$host" "$sidecar"
+node "$repository/frontend/apps/admin-desktop/scripts/verify-production.mjs" --files "$host" "$sidecar"
 echo "GO_ADMIN_MACOS_APP_VERIFY_PASS"

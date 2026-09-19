@@ -2,7 +2,7 @@
 set -eu
 
 repo_root=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
-. "$repo_root/scripts/go-admin-plus/common.sh"
+. "$repo_root/scripts/backend/common.sh"
 
 cd "$repo_root"
 require_tool node
@@ -12,8 +12,8 @@ case ${1:-generate} in
   verify)
     node scripts/contracts/cli.mjs lint
     node --test --test-concurrency=1 scripts/contracts/*.test.mjs
-    run_pnpm --dir go-admin-plus-ui --filter @go-admin-plus/api-client typecheck
-    exec_pnpm --dir go-admin-plus-ui --filter @go-admin-plus/api-client test
+    run_pnpm --dir frontend --filter @go-admin-plus/api-client typecheck
+    exec_pnpm --dir frontend --filter @go-admin-plus/api-client test
     ;;
   lint)
     exec node scripts/contracts/cli.mjs lint

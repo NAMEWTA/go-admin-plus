@@ -7,8 +7,8 @@ x-go-admin-module: iam-session
 x-go-admin-codegen:
   owner: iam
   goPackage: sessionv2transport
-  goOutput: go-admin-plus/internal/modules/iam/session_v2/transport/openapi.gen.go
-  typescriptOutput: go-admin-plus-ui/packages/domains/iam/src/session_v2/generated
+  goOutput: backend/internal/modules/iam/session_v2/transport/openapi.gen.go
+  typescriptOutput: frontend/packages/domains/iam/src/session_v2/generated
 paths:
   /iam/session:
     get:

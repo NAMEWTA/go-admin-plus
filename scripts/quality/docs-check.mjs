@@ -8,7 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
 export const documentationRoots = Object.freeze([
   'README.md', '.agents/skills', 'docs', 'deploy/README.md', 'database/README.md',
-  'release', 'go-admin-plus/README.md', 'go-admin-plus/config/README.md', 'go-admin-plus-ui'
+  'release', 'backend/README.md', 'backend/config/README.md', 'frontend'
 ])
 
 const requiredContracts = Object.freeze({
@@ -113,7 +113,7 @@ export const checkDocumentation = repository => {
     if (!existsSync(absolute)) return []
     if (extname(absolute) === '.md') return [absolute]
     const markdown = walk(absolute).filter(file => extname(file) === '.md')
-    return path === 'go-admin-plus-ui'
+    return path === 'frontend'
       ? markdown.filter(file => file.toLowerCase().endsWith(`${sep}readme.md`))
       : markdown
   })

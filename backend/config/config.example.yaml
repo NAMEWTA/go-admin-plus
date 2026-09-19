@@ -1,0 +1,43 @@
+# 本地开发示例：从 backend 目录启动。路径相对于工作目录解析。
+http:
+  listen: 127.0.0.1:8080
+  trustedProxies: [] # 仅填写实际反向代理的 IP/CIDR；默认忽略转发来源头。
+log:
+  level: info
+runtime:
+  role: all # all / api / worker；SQLite 必须为 all。
+  dataDir: ../.data/server
+database:
+  driver: sqlite # sqlite / postgres
+  sqlite:
+    path: app.db # 相对于 dataDir
+  postgres:
+    dsn: ''
+    dsnFile: '' # 与 dsn 二选一；生产使用权限为 0600 的密钥文件。
+redis:
+  enabled: false # 仅缓存菜单/权限展示投影，关闭或断网不影响权限正确性。
+  address: 127.0.0.1:6379
+  username: ''
+  passwordFile: ''
+  database: 0
+  tls: false
+  namespace: go-admin-plus
+storage:
+  defaultProvider: local # local / s3；每个文件记录自己的 provider，切换后仍可读取旧文件。
+  local:
+    root: files # 相对于 dataDir；S3 模式也需要此目录暂存上传。
+  s3:
+    endpoint: '' # MinIO 填写完整 http(s) URL；AWS 可留空。
+    region: us-east-1
+    bucket: ''
+    accessKey: ''
+    secretKeyFile: ''
+    pathStyle: false # MinIO 通常为 true。
+  maxUploadBytes: 10485760 # 最大 1 GiB；服务端始终验证真实内容。
+  allowedTypes: [application/pdf, image/jpeg, image/png, text/plain]
+session:
+  idleTimeoutSeconds: 1800
+  absoluteTimeoutSeconds: 43200
+  rotationIntervalSeconds: 900
+audit:
+  retentionDays: 30

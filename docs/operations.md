@@ -14,8 +14,8 @@
 账号，再创建仅当前用户可读的密码文件：
 
 ```bash
-cd go-admin-plus
-go run ./cmd/go-admin-plus recover-admin --profile server-sqlite \
+cd backend
+go run ./cmd/server recover-admin --profile server-sqlite \
   --sqlite-path ../.data/server/go-admin-plus.sqlite3 --data-root ../.data/server \
   --account-id "$ACCOUNT_ID" --reason lost-access --secret-file "$SECRET_FILE"
 ```

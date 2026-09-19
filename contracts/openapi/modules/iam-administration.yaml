@@ -11,8 +11,8 @@ x-go-admin-module: iam-administration
 x-go-admin-codegen:
   owner: iam
   goPackage: administrationtransport
-  goOutput: go-admin-plus/internal/modules/iam/administration/transport/openapi.gen.go
-  typescriptOutput: go-admin-plus-ui/packages/domains/iam/src/administration/generated
+  goOutput: backend/internal/modules/iam/administration/transport/openapi.gen.go
+  typescriptOutput: frontend/packages/domains/iam/src/administration/generated
 security:
   - SessionCookie: []
 paths:
@@ -66,6 +66,7 @@ paths:
       operationId: updateIamUser
       summary: Update a user
       security: [{SessionCookie: [], CsrfToken: []}]
+      parameters: [{name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/UpdateUserRequest'}}}}
       responses:
         '200': {description: Updated user., headers: {X-CSRF-Token: {$ref: '#/components/headers/CsrfToken'}, Set-Cookie: {$ref: '#/components/headers/SetCookie'}}, content: {application/json: {schema: {$ref: '#/components/schemas/User'}}}}
@@ -79,6 +80,7 @@ paths:
     parameters: [{$ref: '#/components/parameters/UserId'}]
     post:
       operationId: startIamUserDeletion
+      parameters: [{name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       summary: Start the single-account deletion lifecycle
       security: [{SessionCookie: [], CsrfToken: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/StartAccountDeletionRequest'}}}}
@@ -103,7 +105,7 @@ paths:
     post:
       operationId: cancelIamUserDeletion
       summary: Cancel an account deletion before worker claim
-      parameters: [{$ref: '#/components/parameters/UserId'}]
+      parameters: [{$ref: '#/components/parameters/UserId'}, {name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       security: [{SessionCookie: [], CsrfToken: []}]
       responses:
         '204': {description: Queued account deletion canceled., headers: {X-CSRF-Token: {$ref: '#/components/headers/CsrfToken'}, Set-Cookie: {$ref: '#/components/headers/SetCookie'}}}
@@ -117,7 +119,7 @@ paths:
     put:
       operationId: setIamUserRoles
       summary: Replace user role assignments
-      parameters: [{$ref: '#/components/parameters/UserId'}]
+      parameters: [{$ref: '#/components/parameters/UserId'}, {name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       security: [{SessionCookie: [], CsrfToken: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SetUserRolesRequest'}}}}
       responses:
@@ -132,7 +134,7 @@ paths:
     put:
       operationId: resetIamUserPassword
       summary: Reset a user password and revoke sessions
-      parameters: [{$ref: '#/components/parameters/UserId'}]
+      parameters: [{$ref: '#/components/parameters/UserId'}, {name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       security: [{SessionCookie: [], CsrfToken: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/ResetPasswordRequest'}}}}
       responses:
@@ -170,6 +172,7 @@ paths:
       operationId: updateIamRole
       summary: Update a role
       security: [{SessionCookie: [], CsrfToken: []}]
+      parameters: [{name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/UpdateRoleRequest'}}}}
       responses:
         '204': {description: Role updated., headers: {X-CSRF-Token: {$ref: '#/components/headers/CsrfToken'}, Set-Cookie: {$ref: '#/components/headers/SetCookie'}}}
@@ -183,6 +186,7 @@ paths:
       operationId: deleteIamRole
       summary: Delete a role
       security: [{SessionCookie: [], CsrfToken: []}]
+      parameters: [{name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       responses:
         '204': {description: Role deleted., headers: {X-CSRF-Token: {$ref: '#/components/headers/CsrfToken'}, Set-Cookie: {$ref: '#/components/headers/SetCookie'}}}
         '401': {$ref: '#/components/responses/AuthenticationProblem'}
@@ -194,7 +198,7 @@ paths:
     put:
       operationId: setIamRoleGrants
       summary: Replace role Permission Code and menu grants
-      parameters: [{$ref: '#/components/parameters/RoleId'}]
+      parameters: [{$ref: '#/components/parameters/RoleId'}, {name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       security: [{SessionCookie: [], CsrfToken: []}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/SetRoleGrantsRequest'}}}}
       responses:
@@ -232,6 +236,7 @@ paths:
       operationId: updateIamMenu
       summary: Update a menu
       security: [{SessionCookie: [], CsrfToken: []}]
+      parameters: [{name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       requestBody: {required: true, content: {application/json: {schema: {$ref: '#/components/schemas/MenuInput'}}}}
       responses:
         '204': {description: Menu updated., headers: {X-CSRF-Token: {$ref: '#/components/headers/CsrfToken'}, Set-Cookie: {$ref: '#/components/headers/SetCookie'}}}
@@ -245,6 +250,7 @@ paths:
       operationId: deleteIamMenu
       summary: Delete a menu
       security: [{SessionCookie: [], CsrfToken: []}]
+      parameters: [{name: If-Match, in: header, required: true, schema: {type: string, pattern: '^\"?[1-9][0-9]*\"?$'}}]
       responses:
         '204': {description: Menu deleted., headers: {X-CSRF-Token: {$ref: '#/components/headers/CsrfToken'}, Set-Cookie: {$ref: '#/components/headers/SetCookie'}}}
         '401': {$ref: '#/components/responses/AuthenticationProblem'}
@@ -288,6 +294,7 @@ components:
       additionalProperties: false
       required: [id, username, displayName, email, disabled, roleIds]
       properties:
+        revision: {type: integer, minimum: 1}
         id: {$ref: '#/components/schemas/Identifier'}
         username: {type: string, minLength: 3, maxLength: 64}
         displayName: {type: string, minLength: 1, maxLength: 80}
@@ -315,6 +322,7 @@ components:
       additionalProperties: false
       required: [displayName, email, enabled]
       properties:
+        revision: {type: integer, minimum: 1}
         displayName: {type: string, minLength: 1, maxLength: 80}
         email: {type: string, format: email, maxLength: 254}
         enabled: {type: boolean}
@@ -330,7 +338,7 @@ components:
       properties:
         strategy: {type: string, enum: [transfer, purge]}
         transferTargetId: {$ref: '#/components/schemas/Identifier'}
-        purgeConfirmed: {type: boolean, default: false}
+        purgeConfirmed: {type: boolean}
     AccountDeletion:
       type: object
       additionalProperties: false
@@ -354,6 +362,7 @@ components:
       additionalProperties: false
       required: [id, key, name, dataScope, enabled, protected, permissionCodes, menuIds]
       properties:
+        revision: {type: integer, minimum: 1}
         id: {$ref: '#/components/schemas/Identifier'}
         key: {type: string, minLength: 3, maxLength: 64, pattern: '^[a-z0-9][a-z0-9_-]*$'}
         name: {type: string, minLength: 1, maxLength: 100}
@@ -375,6 +384,7 @@ components:
       additionalProperties: false
       required: [key, name, dataScope, enabled]
       properties:
+        revision: {type: integer, minimum: 1}
         key: {type: string, minLength: 3, maxLength: 64, pattern: '^[a-z0-9][a-z0-9_-]*$'}
         name: {type: string, minLength: 1, maxLength: 100}
         dataScope: {$ref: '#/components/schemas/DataScope'}
@@ -392,10 +402,17 @@ components:
       required: [id, key, label, path, permissionCode, sortOrder, protected]
       properties:
         id: {$ref: '#/components/schemas/Identifier'}
+        parentId: {type: string, maxLength: 64}
+        kind: {type: string, enum: [directory, page, button]}
+        routeKey: {type: string, maxLength: 64}
+        icon: {type: string, maxLength: 64}
+        enabled: {type: boolean}
+        hidden: {type: boolean}
+        revision: {type: integer, minimum: 1}
         key: {type: string, minLength: 3, maxLength: 64, pattern: '^[a-z0-9][a-z0-9_-]*$'}
         label: {type: string, minLength: 1, maxLength: 80}
-        path: {type: string, minLength: 2, maxLength: 200, pattern: '^/[a-z0-9][a-z0-9/_-]*$'}
-        permissionCode: {type: string, minLength: 3, maxLength: 100}
+        path: {type: string, maxLength: 200}
+        permissionCode: {type: string, maxLength: 100}
         sortOrder: {type: integer, minimum: 0, maximum: 100000}
         protected: {type: boolean}
     MenuInput:
@@ -403,10 +420,17 @@ components:
       additionalProperties: false
       required: [key, label, path, permissionCode, sortOrder]
       properties:
+        parentId: {type: string, maxLength: 64}
+        kind: {type: string, enum: [directory, page, button]}
+        routeKey: {type: string, maxLength: 64}
+        icon: {type: string, maxLength: 64}
+        enabled: {type: boolean}
+        hidden: {type: boolean}
+        revision: {type: integer, minimum: 1}
         key: {type: string, minLength: 3, maxLength: 64, pattern: '^[a-z0-9][a-z0-9_-]*$'}
         label: {type: string, minLength: 1, maxLength: 80}
-        path: {type: string, minLength: 2, maxLength: 200, pattern: '^/[a-z0-9][a-z0-9/_-]*$'}
-        permissionCode: {type: string, minLength: 3, maxLength: 100}
+        path: {type: string, maxLength: 200}
+        permissionCode: {type: string, maxLength: 100}
         sortOrder: {type: integer, minimum: 0, maximum: 100000}
     Permission:
       type: object
@@ -418,10 +442,18 @@ components:
       additionalProperties: false
       required: [key, label, path, permissionCode, sortOrder]
       properties:
+        parentId: {type: string, maxLength: 64}
+        kind: {type: string, enum: [directory, page, button]}
+        routeKey: {type: string, maxLength: 64}
+        icon: {type: string, maxLength: 64}
+        enabled: {type: boolean}
+        hidden: {type: boolean}
+        revision: {type: integer, minimum: 1}
+        id: {type: string}
         key: {type: string, minLength: 3, maxLength: 64, pattern: '^[a-z0-9][a-z0-9_-]*$'}
         label: {type: string, minLength: 1, maxLength: 80}
-        path: {type: string, minLength: 2, maxLength: 200}
-        permissionCode: {type: string, minLength: 3, maxLength: 100}
+        path: {type: string, maxLength: 200}
+        permissionCode: {type: string, maxLength: 100}
         sortOrder: {type: integer}
     CapabilityManifest:
       type: object

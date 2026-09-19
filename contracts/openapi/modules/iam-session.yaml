@@ -14,8 +14,8 @@ x-go-admin-module: iam-session
 x-go-admin-codegen:
   owner: iam
   goPackage: sessiontransport
-  goOutput: go-admin-plus/internal/modules/iam/session/transport/openapi.gen.go
-  typescriptOutput: go-admin-plus-ui/packages/domains/iam/src/session/generated
+  goOutput: backend/internal/modules/iam/session/transport/openapi.gen.go
+  typescriptOutput: frontend/packages/domains/iam/src/session/generated
 security:
   - SessionCookie: []
 paths:

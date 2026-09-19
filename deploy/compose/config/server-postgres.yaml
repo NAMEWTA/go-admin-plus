@@ -1,0 +1,25 @@
+# API 与 worker 可独立部署；worker 命令复用此文件。
+http:
+  listen: 0.0.0.0:8080
+  trustedProxies: []
+log:
+  level: info
+runtime:
+  role: api
+  dataDir: /var/lib/go-admin-plus
+database:
+  driver: postgres
+  postgres:
+    dsnFile: /run/secrets/database_dsn
+redis:
+  enabled: false
+  address: redis:6379
+  namespace: go-admin-plus
+storage:
+  defaultProvider: local
+  local:
+    root: files
+  maxUploadBytes: 10485760
+  allowedTypes: [application/pdf, image/jpeg, image/png, text/plain]
+audit:
+  retentionDays: 30

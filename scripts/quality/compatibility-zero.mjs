@@ -5,20 +5,20 @@ import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const removedPaths = [
-  'go-admin-ui-plus', 'go-admin-plus/app', 'go-admin-plus/common', 'go-admin-plus/api',
-  'go-admin-plus/internal/tenant', 'go-admin-plus/internal/profile', 'go-admin-plus/cmd/go-admin-desktop',
-  'go-admin-plus-ui/apps/admin-desktop/src-tauri/src/demo_contract.rs',
+  'go-admin-ui-plus', 'go-admin-plus', 'go-admin-plus-ui', 'backend/internal/modules/demo', 'frontend/packages/domains/demo', 'frontend/packages/web-domains/demo', 'backend/app', 'backend/common', 'backend/api',
+  'backend/internal/tenant', 'backend/internal/profile', 'backend/cmd/go-admin-desktop',
+  'frontend/apps/admin-desktop/src-tauri/src/demo_contract.rs',
   'contracts/openapi/modules/generator.yaml', 'contracts/openapi/modules/organization.yaml',
-  'go-admin-plus/internal/modules/generator', 'go-admin-plus/internal/modules/organization',
-  'go-admin-plus-ui/packages/domains/generator', 'go-admin-plus-ui/packages/domains/organization',
-  'go-admin-plus-ui/packages/web-domains/generator', 'go-admin-plus-ui/packages/web-domains/organization'
+  'backend/internal/modules/generator', 'backend/internal/modules/organization',
+  'frontend/packages/domains/generator', 'frontend/packages/domains/organization',
+  'frontend/packages/web-domains/generator', 'frontend/packages/web-domains/organization'
 ]
 const forbidden = [
   ['old frontend name', /go-admin-ui-plus/], ['Wails runtime', /\bwails(?:app)?\b/i],
   ['old Go module path', /(?:^|\n)\s*module\s+go-admin\s*(?:\n|$)|["']go-admin\/internal\//],
   ['old frontend package scope', /@go-admin\//],
   ['old upstream core', /go-admin-core/], ['Casbin', /\bcasbin\b/i],
-  ['Redis', /\bredis\b/i], ['tenant feature', /\btenant(?:s|_id)?\b/i],
+  ['tenant feature', /\btenant(?:s|_id)?\b/i],
   ['MySQL', /\bmysql\b/i], ['SQL Server', /\bsqlserver\b|\bsql server\b/i],
   ['JWT', /\bjwts?\b/i], ['refresh token', /\brefresh[_ -]?tokens?\b/i],
   ['AutoMigrate', /\bauto[_ -]?migrate\b/i], ['GORM', /gorm\.io\/|\bgorm\b/i],
@@ -36,14 +36,13 @@ const ignoredDirectories = new Set([
 ])
 const allowedMatches = new Map(Object.entries({
   'NOTICE.md': ['old upstream core'],
-  'go-admin-plus-ui/apps/admin-desktop/src-tauri/src/proxy.rs': ['MySQL', 'refresh token'],
-  'go-admin-plus/internal/application/architecture_test.go': ['Wails runtime'],
-  'go-admin-plus/internal/modules/files/migrations/0010-files/provider_test.go': ['tenant feature'],
-  'go-admin-plus/internal/modules/files/migrations/0020-capacity/provider_test.go': ['tenant feature'],
-  'go-admin-plus/internal/modules/iam/authorization/capability_registry_test.go': ['MySQL'],
-  'go-admin-plus/internal/platform/logging/redaction.go': ['MySQL'],
-  'go-admin-plus/test/demo/products_sqlite_test.go': ['tenant feature'],
-  'go-admin-plus/test/iam/authorization/administration_test.go': ['Casbin', 'tenant feature', 'JWT'],
+  'frontend/apps/admin-desktop/src-tauri/src/proxy.rs': ['MySQL', 'refresh token'],
+  'backend/internal/application/architecture_test.go': ['Wails runtime'],
+  'backend/internal/modules/files/migrations/0010-files/provider_test.go': ['tenant feature'],
+  'backend/internal/modules/files/migrations/0020-capacity/provider_test.go': ['tenant feature'],
+  'backend/internal/modules/iam/authorization/capability_registry_test.go': ['MySQL'],
+  'backend/internal/platform/logging/redaction.go': ['MySQL'],
+  'backend/test/iam/authorization/administration_test.go': ['Casbin', 'tenant feature', 'JWT'],
   'release/macos/README.md': ['Wails runtime'],
   'scripts/quality/architecture-check.mjs': ['old frontend name'],
   'scripts/quality/architecture-check.test.mjs': ['old frontend package scope'],

@@ -14,8 +14,8 @@ x-go-admin-module: audit
 x-go-admin-codegen:
   owner: audit
   goPackage: audittransport
-  goOutput: go-admin-plus/internal/modules/audit/transport/openapi.gen.go
-  typescriptOutput: go-admin-plus-ui/packages/domains/audit/src/generated
+  goOutput: backend/internal/modules/audit/transport/openapi.gen.go
+  typescriptOutput: frontend/packages/domains/audit/src/generated
 security:
   - SessionCookie: []
 paths:
@@ -176,6 +176,9 @@ components:
       required: [id, kind, action, outcome, actorType, source, subject, occurredAt]
       properties:
         id: { type: string, minLength: 10, maxLength: 350, pattern: '^a1\.(ls|lf|oc|ou|od)\.[A-Za-z0-9_-]+$' }
+        eventId: {type: string, minLength: 36, maxLength: 36}
+        traceId: {type: string, minLength: 16, maxLength: 64}
+        operation: {type: string, minLength: 1, maxLength: 100}
         kind: { $ref: '#/components/schemas/AuditKind' }
         action: { $ref: '#/components/schemas/AuditAction' }
         outcome: { $ref: '#/components/schemas/AuditOutcome' }

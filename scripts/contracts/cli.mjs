@@ -23,18 +23,18 @@ import {
 import { validatePolicy } from './policy.mjs'
 
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const uiRoot = join(repositoryRoot, 'go-admin-plus-ui')
+const uiRoot = join(repositoryRoot, 'frontend')
 const canonicalContract = join(repositoryRoot, 'contracts', 'openapi', 'openapi.yaml')
 const config = join(repositoryRoot, 'scripts', 'contracts', 'redocly.yaml')
 const goConfigPath = join(repositoryRoot, 'scripts', 'contracts', 'oapi-codegen.yaml')
 const manifestPath = join('scripts', 'contracts', 'generated', 'manifest.json')
-const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+const pnpm = process.platform === 'win32' ? 'corepack.cmd' : 'corepack'
 const canonicalOutputs = {
   bundle: join('scripts', 'contracts', 'generated', 'openapi.json'),
-  go: join('go-admin-plus', 'internal', 'contracts', 'openapi.gen.go'),
-  runtimeSpec: join('go-admin-plus', 'internal', 'contracts', 'openapi.json'),
-  typescript: join('go-admin-plus-ui', 'packages', 'api-client', 'src', 'generated', 'schema.ts'),
-  client: join('go-admin-plus-ui', 'packages', 'api-client', 'src', 'generated', 'client.ts')
+  go: join('backend', 'internal', 'contracts', 'openapi.gen.go'),
+  runtimeSpec: join('backend', 'internal', 'contracts', 'openapi.json'),
+  typescript: join('frontend', 'packages', 'api-client', 'src', 'generated', 'schema.ts'),
+  client: join('frontend', 'packages', 'api-client', 'src', 'generated', 'client.ts')
 }
 const canonicalGeneratedFiles = Object.values(canonicalOutputs)
 
@@ -112,6 +112,7 @@ const run = (command, args, options = {}) => {
 }
 
 const redocly = (...args) => run(pnpm, [
+  'pnpm',
   '--dir', uiRoot,
   '--filter', '@go-admin-plus/api-client',
   'exec', 'redocly',
@@ -184,7 +185,7 @@ const generateGo = (input, output, packageName) => {
     const temporaryConfig = join(configDirectory, 'oapi-codegen.json')
     writeFileSync(temporaryConfig, `${JSON.stringify(goConfig, null, 2)}\n`)
     run('go', ['tool', 'oapi-codegen', '--config', temporaryConfig, input], {
-      cwd: join(repositoryRoot, 'go-admin-plus')
+      cwd: join(repositoryRoot, 'backend')
     })
   } finally {
     rmSync(configDirectory, { recursive: true, force: true })
@@ -193,6 +194,7 @@ const generateGo = (input, output, packageName) => {
 
 const generateTypescript = (input, schemaOutput, clientOutput, clientSource) => {
   run(pnpm, [
+  'pnpm',
     '--dir', uiRoot,
     '--filter', '@go-admin-plus/api-client',
     'exec', 'openapi-typescript', input,
@@ -328,10 +330,10 @@ const collectManagedModuleOutputs = (outputRoot, relativeRoot) => {
 }
 
 const discoverManagedModuleOutputs = outputRoot => {
-  const outputs = collectManagedModuleOutputs(outputRoot, 'go-admin-plus/internal/modules')
-  const domainsRoot = join(outputRoot, 'go-admin-plus-ui', 'packages', 'domains')
+  const outputs = collectManagedModuleOutputs(outputRoot, 'backend/internal/modules')
+  const domainsRoot = join(outputRoot, 'frontend', 'packages', 'domains')
   if (!lstatIfPresent(domainsRoot)) return outputs.sort((left, right) => left.localeCompare(right))
-  assertSafeOutputLocation(outputRoot, 'go-admin-plus-ui/packages/domains', { directory: true })
+  assertSafeOutputLocation(outputRoot, 'frontend/packages/domains', { directory: true })
   for (const entry of readdirSync(domainsRoot, { withFileTypes: true })) {
     const ownerPath = join(domainsRoot, entry.name)
     if (entry.isSymbolicLink()) {
@@ -340,16 +342,16 @@ const discoverManagedModuleOutputs = outputRoot => {
     if (!entry.isDirectory()) continue
     outputs.push(...collectManagedModuleOutputs(
       outputRoot,
-      `go-admin-plus-ui/packages/domains/${entry.name}/src`
+      `frontend/packages/domains/${entry.name}/src`
     ))
   }
   return [...new Set(outputs)].sort((left, right) => left.localeCompare(right))
 }
 
 const discoverModuleManifests = outputRoot => {
-  const modulesRoot = join(outputRoot, 'go-admin-plus', 'internal', 'modules')
+  const modulesRoot = join(outputRoot, 'backend', 'internal', 'modules')
   if (!existsSync(modulesRoot)) return []
-  assertSafeOutputLocation(outputRoot, join('go-admin-plus', 'internal', 'modules'), { directory: true })
+  assertSafeOutputLocation(outputRoot, join('backend', 'internal', 'modules'), { directory: true })
   const manifests = []
   const visit = directory => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -383,7 +385,7 @@ const readModuleManifestOutputs = outputRoot => {
       fail(`module generated manifest ${manifestPath} must use schemaVersion 1 and an outputs array`)
     }
     const typescriptDirectory = [
-      'go-admin-plus-ui', 'packages', 'domains', parsedManifest.owner, 'src',
+      'frontend', 'packages', 'domains', parsedManifest.owner, 'src',
       ...parsedManifest.nested, 'generated'
     ].join('/')
     const goDirectory = dirname(manifestPath).split(sep).join('/')

@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "lib": [
+      "ES2024"
+    ],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "noUncheckedIndexedAccess": true,
+    "strict": true,
+    "target": "ES2024",
+    "types": [
+      "node",
+      "vitest/globals",
+      "vite/client"
+    ]
+  },
+  "include": [
+    "../../packages/**/*.ts",
+    "./**/*.ts"
+  ]
+}

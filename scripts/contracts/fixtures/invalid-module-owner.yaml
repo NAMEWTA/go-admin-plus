@@ -7,6 +7,6 @@ x-go-admin-module: invalid-owner-fixture
 x-go-admin-codegen:
   owner: expected-owner
   goPackage: invalidownertransport
-  goOutput: go-admin-plus/internal/modules/different-owner/transport/openapi.gen.go
-  typescriptOutput: go-admin-plus-ui/packages/domains/expected-owner/src/generated
+  goOutput: backend/internal/modules/different-owner/transport/openapi.gen.go
+  typescriptOutput: frontend/packages/domains/expected-owner/src/generated
 paths: {}

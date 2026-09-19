@@ -13,7 +13,6 @@ export const requiredPostgresSuites = Object.freeze([
   ['session-fencing', './internal/modules/iam/session', 'TestPostgresGenerationFencesConcurrentRenewalAndRevoke'],
   ['migration-convergence', './internal/platform/migrations', 'TestPostgresConcurrentProvidersConverge'],
   ['audit', './test/audit', 'TestAuditPostgresMigrationProjectionQueryAndCleanup'],
-  ['demo-crud', './test/demo', 'TestPostgresCRUDContract'],
   ['files-contract', './test/files', 'TestFilesPostgresContract'],
   ['files-capacity', './test/files', 'TestFilesCapacityPostgresDialectContract'],
   ['authorization-fence', './test/iam/authorization', 'TestPostgresRevocationWaitsForFinalAuthorizationFence'],
@@ -68,7 +67,7 @@ const prepareSchema = ({ spawn, goRoot, environment, schema }) => {
 export const runRequiredPostgres = ({ root, environment = process.env, spawn = spawnSync, prepare = prepareSchema, suites = requiredPostgresSuites }) => {
   const dsn = validateRequiredEnvironment(environment)
   if (suites.length === 0) throw new Error('required PostgreSQL suite contains zero targets')
-  const goRoot = join(root, 'go-admin-plus')
+  const goRoot = join(root, 'backend')
   const runToken = `${environment.GITHUB_RUN_ID ?? process.pid}_${environment.GITHUB_RUN_ATTEMPT ?? '0'}`.replaceAll(/[^a-zA-Z0-9_]/g, '_').toLowerCase()
   const report = []
   for (const [index, suite] of suites.entries()) {

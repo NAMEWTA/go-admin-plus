@@ -1,0 +1,2037 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IAM Administration API",
+    "version": "1.0.0",
+    "description": "User, role, menu, Permission Code, data scope, and capability manifest management.",
+    "license": {
+      "name": "MIT",
+      "identifier": "MIT"
+    }
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "security": [
+    {
+      "SessionCookie": []
+    }
+  ],
+  "paths": {
+    "/iam/administration/manifest": {
+      "get": {
+        "operationId": "getIamCapabilityManifest",
+        "summary": "Get the current capability manifest",
+        "responses": {
+          "200": {
+            "description": "Current database-backed capabilities.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapabilityManifest"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/users": {
+      "get": {
+        "operationId": "listIamUsers",
+        "summary": "List users within the caller data scope",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scope-filtered users.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createIamUser",
+        "summary": "Create a user",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created user.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/users/{userId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "get": {
+        "operationId": "getIamUser",
+        "summary": "Get a user within the caller data scope",
+        "responses": {
+          "200": {
+            "description": "Scope-filtered user detail.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateIamUser",
+        "summary": "Update a user",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/users/{userId}/deletion": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "post": {
+        "operationId": "startIamUserDeletion",
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "summary": "Start the single-account deletion lifecycle",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartAccountDeletionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Account deletion queued.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletion"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "get": {
+        "operationId": "getIamUserDeletion",
+        "summary": "Read the current account deletion lifecycle",
+        "responses": {
+          "200": {
+            "description": "Current account deletion state.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletion"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/users/{userId}/deletion/cancel": {
+      "post": {
+        "operationId": "cancelIamUserDeletion",
+        "summary": "Cancel an account deletion before worker claim",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Queued account deletion canceled.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/users/{userId}/roles": {
+      "put": {
+        "operationId": "setIamUserRoles",
+        "summary": "Replace user role assignments",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetUserRolesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Assignments replaced.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/users/{userId}/password": {
+      "put": {
+        "operationId": "resetIamUserPassword",
+        "summary": "Reset a user password and revoke sessions",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UserId"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Password replaced and all target sessions revoked.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/roles": {
+      "get": {
+        "operationId": "listIamRoles",
+        "summary": "List roles",
+        "responses": {
+          "200": {
+            "description": "Roles.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Role"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createIamRole",
+        "summary": "Create a role",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created role.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Role"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/roles/{roleId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/RoleId"
+        }
+      ],
+      "patch": {
+        "operationId": "updateIamRole",
+        "summary": "Update a role",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Role updated.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteIamRole",
+        "summary": "Delete a role",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Role deleted.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/roles/{roleId}/grants": {
+      "put": {
+        "operationId": "setIamRoleGrants",
+        "summary": "Replace role Permission Code and menu grants",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/RoleId"
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRoleGrantsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Grants replaced.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/menus": {
+      "get": {
+        "operationId": "listIamMenus",
+        "summary": "List menus",
+        "responses": {
+          "200": {
+            "description": "Menus.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Menu"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createIamMenu",
+        "summary": "Create a menu",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MenuInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created menu.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Menu"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/menus/{menuId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MenuId"
+        }
+      ],
+      "patch": {
+        "operationId": "updateIamMenu",
+        "summary": "Update a menu",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MenuInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Menu updated.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/ValidationProblem"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteIamMenu",
+        "summary": "Delete a menu",
+        "security": [
+          {
+            "SessionCookie": [],
+            "CsrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\\"?[1-9][0-9]*\\\"?$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Menu deleted.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFoundProblem"
+          },
+          "409": {
+            "$ref": "#/components/responses/ConflictProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    },
+    "/iam/administration/permissions": {
+      "get": {
+        "operationId": "listIamPermissions",
+        "summary": "List stable Permission Codes",
+        "responses": {
+          "200": {
+            "description": "Stable Permission Codes.",
+            "headers": {
+              "X-CSRF-Token": {
+                "$ref": "#/components/headers/CsrfToken"
+              },
+              "Set-Cookie": {
+                "$ref": "#/components/headers/SetCookie"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Permission"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationProblem"
+          },
+          "403": {
+            "$ref": "#/components/responses/AuthorizationProblem"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalProblem"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-go-admin-session",
+        "description": "Opaque server-side session identifier. JavaScript cannot read the production cookie."
+      },
+      "CsrfToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "description": "Per-session anti-forgery token required for state-changing Web requests."
+      }
+    },
+    "parameters": {
+      "UserId": {
+        "name": "userId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Identifier"
+        }
+      },
+      "RoleId": {
+        "name": "roleId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Identifier"
+        }
+      },
+      "MenuId": {
+        "name": "menuId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/Identifier"
+        }
+      }
+    },
+    "headers": {
+      "CsrfToken": {
+        "description": "Stable anti-forgery token for the authenticated Session family.",
+        "schema": {
+          "type": "string",
+          "minLength": 43,
+          "maxLength": 43
+        }
+      },
+      "SetCookie": {
+        "description": "Replacement session cookie when periodic rotation occurs.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "responses": {
+      "ValidationProblem": {
+        "description": "Request validation failed.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "AuthenticationProblem": {
+        "description": "Authentication is required.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "AuthorizationProblem": {
+        "description": "Authorization failed.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "NotFoundProblem": {
+        "description": "Resource was not found.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "ConflictProblem": {
+        "description": "Resource conflicts with current state.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      },
+      "InternalProblem": {
+        "description": "Internal failure.",
+        "headers": {
+          "X-CSRF-Token": {
+            "$ref": "#/components/headers/CsrfToken"
+          },
+          "Set-Cookie": {
+            "$ref": "#/components/headers/SetCookie"
+          }
+        },
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "title",
+          "status",
+          "category",
+          "code",
+          "traceId"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri-reference",
+            "description": "Stable problem type identifier."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "validation",
+              "authentication",
+              "authorization",
+              "not_found",
+              "conflict",
+              "internal"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 512,
+            "description": "Safe client-facing context without infrastructure details."
+          },
+          "instance": {
+            "type": "string",
+            "format": "uri-reference"
+          },
+          "traceId": {
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 64,
+            "pattern": "^[a-f0-9]+$"
+          },
+          "violations": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ValidationViolation"
+            }
+          }
+        }
+      },
+      "Identifier": {
+        "type": "string",
+        "minLength": 16,
+        "maxLength": 64
+      },
+      "DataScope": {
+        "type": "string",
+        "enum": [
+          "all",
+          "self"
+        ]
+      },
+      "User": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "username",
+          "displayName",
+          "email",
+          "disabled",
+          "roleIds"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "roleIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            }
+          }
+        }
+      },
+      "UserPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rows",
+          "total"
+        ],
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/User"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "username",
+          "displayName",
+          "email",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "password": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 128
+          }
+        }
+      },
+      "UpdateUserRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "displayName",
+          "email",
+          "enabled"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SetUserRolesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "roleIds"
+        ],
+        "properties": {
+          "roleIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            }
+          }
+        }
+      },
+      "StartAccountDeletionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "strategy"
+        ],
+        "properties": {
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "transfer",
+              "purge"
+            ]
+          },
+          "transferTargetId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "purgeConfirmed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AccountDeletion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "accountId",
+          "strategy",
+          "status",
+          "auditReference",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "strategy": {
+            "type": "string",
+            "enum": [
+              "transfer",
+              "purge"
+            ]
+          },
+          "transferTargetId": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "claimed",
+              "completed",
+              "failed"
+            ]
+          },
+          "auditReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 128
+          }
+        }
+      },
+      "Role": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "key",
+          "name",
+          "dataScope",
+          "enabled",
+          "protected",
+          "permissionCodes",
+          "menuIds"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "key": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "dataScope": {
+            "$ref": "#/components/schemas/DataScope"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "protected": {
+            "type": "boolean"
+          },
+          "permissionCodes": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 100
+            }
+          },
+          "menuIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            }
+          }
+        }
+      },
+      "CreateRoleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "name",
+          "dataScope"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "dataScope": {
+            "$ref": "#/components/schemas/DataScope"
+          }
+        }
+      },
+      "UpdateRoleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "name",
+          "dataScope",
+          "enabled"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "key": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "dataScope": {
+            "$ref": "#/components/schemas/DataScope"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SetRoleGrantsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "permissionCodes",
+          "menuIds"
+        ],
+        "properties": {
+          "permissionCodes": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 100
+            }
+          },
+          "menuIds": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/components/schemas/Identifier"
+            }
+          }
+        }
+      },
+      "Menu": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "key",
+          "label",
+          "path",
+          "permissionCode",
+          "sortOrder",
+          "protected"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/Identifier"
+          },
+          "parentId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "page",
+              "button"
+            ]
+          },
+          "routeKey": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "icon": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "key": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "permissionCode": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "sortOrder": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          },
+          "protected": {
+            "type": "boolean"
+          }
+        }
+      },
+      "MenuInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "label",
+          "path",
+          "permissionCode",
+          "sortOrder"
+        ],
+        "properties": {
+          "parentId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "page",
+              "button"
+            ]
+          },
+          "routeKey": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "icon": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "key": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "permissionCode": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "sortOrder": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          }
+        }
+      },
+      "Permission": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "name"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 100
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      },
+      "CapabilityMenu": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "label",
+          "path",
+          "permissionCode",
+          "sortOrder"
+        ],
+        "properties": {
+          "parentId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "directory",
+              "page",
+              "button"
+            ]
+          },
+          "routeKey": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "icon": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 64,
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "permissionCode": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "sortOrder": {
+            "type": "integer"
+          }
+        }
+      },
+      "CapabilityManifest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "permissionCodes",
+          "menus",
+          "dataScope"
+        ],
+        "properties": {
+          "permissionCodes": {
+            "type": "array",
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 100
+            }
+          },
+          "menus": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CapabilityMenu"
+            }
+          },
+          "dataScope": {
+            "$ref": "#/components/schemas/DataScope"
+          }
+        }
+      },
+      "ValidationViolation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "rule"
+        ],
+        "properties": {
+          "field": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "rule": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 256
+          }
+        }
+      }
+    }
+  },
+  "x-go-admin-module": "iam-administration",
+  "x-go-admin-codegen": {
+    "owner": "iam",
+    "goPackage": "administrationtransport",
+    "goOutput": "backend/internal/modules/iam/administration/transport/openapi.gen.go",
+    "typescriptOutput": "frontend/packages/domains/iam/src/administration/generated"
+  }
+}

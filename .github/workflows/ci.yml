@@ -25,8 +25,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go-admin-plus/go.mod
-          cache-dependency-path: go-admin-plus/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 11.1.3
@@ -35,11 +35,11 @@ jobs:
         with:
           node-version: 22.22.3
           cache: pnpm
-          cache-dependency-path: go-admin-plus-ui/pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install managed tools
         run: |
           go install github.com/go-task/task/v3/cmd/task@v3.48.0
-          pnpm --dir go-admin-plus-ui install --frozen-lockfile
+          pnpm --dir frontend install --frozen-lockfile
       - name: Run root quality contract
         run: |
           task governance:check
@@ -60,20 +60,20 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go-admin-plus/go.mod
-          cache-dependency-path: go-admin-plus/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 11.1.3
           run_install: false
       - name: Test, analyze, and build
-        working-directory: go-admin-plus
+        working-directory: backend
         run: |
           go test ./... -count=1
           go test -tags sqlite ./... -count=1
           go test -race ./... -count=1
           go vet ./...
-          CGO_ENABLED=0 go build ./cmd/go-admin-plus ./cmd/desktop-sidecar
+          CGO_ENABLED=0 go build ./cmd/server ./cmd/desktop-sidecar
           go mod tidy
           git diff --exit-code -- go.mod go.sum
 
@@ -104,12 +104,36 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go-admin-plus/go.mod
-          cache-dependency-path: go-admin-plus/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - name: Assert PostgreSQL service health
         run: pg_isready -h 127.0.0.1 -p 5432 -U postgres -d go_admin_ci
       - name: Run non-skippable PostgreSQL suites
         run: node scripts/ci/required-postgres.mjs
+      - name: Verify all database, cache, and file storage combinations
+        working-directory: backend
+        env:
+          GO_ADMIN_TEST_REDIS_ADDRESS: 127.0.0.1:6379
+          GO_ADMIN_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+          GO_ADMIN_TEST_S3_ACCESS_KEY: foundation-ci
+          GO_ADMIN_TEST_S3_SECRET_KEY: foundation-ci-storage
+        run: |
+          set -euo pipefail
+          trap 'docker stop go-admin-ci-redis go-admin-ci-s3 >/dev/null 2>&1' EXIT
+          docker run --detach --rm --name go-admin-ci-redis -p 127.0.0.1:6379:6379 \
+            redis:8.6.3@sha256:4d25e2fe601f7ffaeb4437cb6ced3518bc36edf34ebe98863c80836943d94529
+          docker run --detach --rm --name go-admin-ci-s3 -p 127.0.0.1:9000:9000 \
+            -e MINIO_ROOT_USER="$GO_ADMIN_TEST_S3_ACCESS_KEY" -e MINIO_ROOT_PASSWORD="$GO_ADMIN_TEST_S3_SECRET_KEY" \
+            minio/minio:RELEASE.2025-09-07T16-13-09Z@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e server /data
+          for attempt in $(seq 1 30); do
+            if docker exec go-admin-ci-redis redis-cli ping | grep -qx PONG && curl --fail --silent http://127.0.0.1:9000/minio/health/ready; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec go-admin-ci-redis redis-cli ping | grep -qx PONG
+          curl --fail --silent http://127.0.0.1:9000/minio/health/ready
+          go test ./internal/app/product -run '^TestFoundationStorageCacheMatrix$' -count=1 -v
 
   frontend:
     name: pnpm workspace full matrix
@@ -127,9 +151,9 @@ jobs:
         with:
           node-version: 22.22.3
           cache: pnpm
-          cache-dependency-path: go-admin-plus-ui/pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install and verify
-        working-directory: go-admin-plus-ui
+        working-directory: frontend
         run: |
           pnpm install --frozen-lockfile
           pnpm lint
@@ -151,8 +175,8 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go-admin-plus/go.mod
-          cache-dependency-path: go-admin-plus/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 11.1.3
@@ -161,14 +185,14 @@ jobs:
         with:
           node-version: 22.22.3
           cache: pnpm
-          cache-dependency-path: go-admin-plus-ui/pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install 1.96.0 --profile minimal
+          rustup toolchain install 1.96.0 --profile minimal --component clippy --component rustfmt
           rustup default 1.96.0
       - name: Install locked workspaces and pinned scanners
         run: |
-          pnpm --dir go-admin-plus-ui install --frozen-lockfile --ignore-scripts
+          pnpm --dir frontend install --frozen-lockfile --ignore-scripts
           go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
           cargo install cargo-audit --version 0.22.2 --locked
           cargo install cargo-deny --version 0.20.2 --locked
@@ -184,8 +208,15 @@ jobs:
           retention-days: 14
 
   desktop-rust:
-    name: Tauri 2 native build
-    runs-on: macos-15
+    name: Tauri 2 ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15, macos-15-intel, windows-2025]
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -193,8 +224,8 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go-admin-plus/go.mod
-          cache-dependency-path: go-admin-plus/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 11.1.3
@@ -203,18 +234,23 @@ jobs:
         with:
           node-version: 22.22.3
           cache: pnpm
-          cache-dependency-path: go-admin-plus-ui/pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Linux native dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - name: Install Rust toolchain
         run: |
-          rustup toolchain install 1.96.0 --profile minimal
+          rustup toolchain install 1.96.0 --profile minimal --component clippy --component rustfmt
           rustup default 1.96.0
       - name: Install frontend workspace
-        run: pnpm --dir go-admin-plus-ui install --frozen-lockfile
+        run: pnpm --dir frontend install --frozen-lockfile
       - name: Verify and build native host
         run: |
           node release/shared/sidecar/build.mjs --host
-          cargo test --manifest-path go-admin-plus-ui/apps/admin-desktop/src-tauri/Cargo.toml --locked
-          cargo clippy --manifest-path go-admin-plus-ui/apps/admin-desktop/src-tauri/Cargo.toml --locked --all-targets -- -D warnings
-          pnpm --dir go-admin-plus-ui --filter @go-admin-plus/admin-desktop tauri build \
+          cargo fmt --manifest-path frontend/apps/admin-desktop/src-tauri/Cargo.toml --check
+          cargo test --manifest-path frontend/apps/admin-desktop/src-tauri/Cargo.toml --locked --features custom-protocol
+          cargo clippy --manifest-path frontend/apps/admin-desktop/src-tauri/Cargo.toml --locked --all-targets --features custom-protocol -- -D warnings
+          cargo clippy --manifest-path frontend/apps/admin-desktop/src-tauri/Cargo.toml --locked --all-targets --features native-e2e -- -D warnings
+          pnpm --dir frontend --filter @go-admin-plus/admin-desktop tauri build \
             --features custom-protocol --no-bundle
-          node go-admin-plus-ui/apps/admin-desktop/scripts/verify-build.mjs
+          node frontend/apps/admin-desktop/scripts/verify-build.mjs

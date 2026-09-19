@@ -12,13 +12,13 @@ as root on a machine you control; keep the bootstrap password and PostgreSQL DSN
 sudo useradd --system --home /var/lib/go-admin-plus --shell /usr/sbin/nologin go-admin-plus
 sudo install -d -o go-admin-plus -g go-admin-plus -m 0750 /opt/go-admin-plus /etc/go-admin-plus /var/lib/go-admin-plus
 sudo install -m 0755 bin/go-admin-plus-server /opt/go-admin-plus/go-admin-plus-server
-sudo install -m 0640 config/server-sqlite.json /etc/go-admin-plus/server-sqlite.json
-sudo install -m 0640 config/server-postgres.json /etc/go-admin-plus/server-postgres.json
+sudo install -m 0640 config/server-sqlite.yaml /etc/go-admin-plus/server-sqlite.yaml
+sudo install -m 0640 config/server-postgres.yaml /etc/go-admin-plus/server-postgres.yaml
 sudo install -m 0644 systemd/go-admin-plus-server.service /etc/systemd/system/
 sudo install -m 0644 systemd/go-admin-plus-server-postgres.service /etc/systemd/system/
 ```
 
-Choose one profile. For SQLite, use the supplied `server-sqlite.json`; for PostgreSQL, create a
+Choose one profile. For SQLite, use the supplied `server-sqlite.yaml`; for PostgreSQL, create a
 root-readable `/etc/go-admin-plus/server.env` containing `GO_ADMIN_DATABASE_DSN_FILE` that points to
 a mode `0600` DSN file. Set `GO_ADMIN_LOG_LEVEL` in the same environment file when needed.
 
@@ -26,12 +26,12 @@ Initialize the database before starting the unit:
 
 ```bash
 sudo -u go-admin-plus /opt/go-admin-plus/go-admin-plus-server migrate \
-  --profile server-sqlite --config /etc/go-admin-plus/server-sqlite.json \
+  --profile server-sqlite --config /etc/go-admin-plus/server-sqlite.yaml \
   --data-root /var/lib/go-admin-plus
 sudo -u go-admin-plus /opt/go-admin-plus/go-admin-plus-server bootstrap \
-  --profile server-sqlite --config /etc/go-admin-plus/server-sqlite.json \
+  --profile server-sqlite --config /etc/go-admin-plus/server-sqlite.yaml \
   --data-root /var/lib/go-admin-plus --username admin \
-  --display-name Administrator --email admin@example.invalid --secret-file /run/go-admin-plus/bootstrap.secret
+  --display-name Administrator --email admin@example.invalid --secret-file /run/backend/bootstrap.secret
 ```
 
 Use `server-postgres` and the PostgreSQL profile for a PostgreSQL deployment. Run `doctor` after

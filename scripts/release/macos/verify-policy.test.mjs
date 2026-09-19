@@ -33,7 +33,7 @@ tags:
   - '*.*.*'
 macos-15
 aarch64-apple-darwin
-build-arm64.sh
+build.sh
 --no-sign
 gh release create
 APPLE_SIGNING_IDENTITY

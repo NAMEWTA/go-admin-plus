@@ -18,7 +18,7 @@ const commandFiles = directory => {
 }
 
 const workspacePackages = root => {
-  const workspaceRoot = join(root, 'go-admin-plus-ui')
+  const workspaceRoot = join(root, 'frontend')
   const packages = []
   for (const packageRoot of ['apps', 'packages', 'packages/adapters', 'packages/domains', 'packages/web-domains']) {
     const directory = join(workspaceRoot, packageRoot)
@@ -35,7 +35,7 @@ const workspacePackages = root => {
 }
 
 const workspacePackageNames = root => {
-  const workspaceRoot = join(root, 'go-admin-plus-ui')
+  const workspaceRoot = join(root, 'frontend')
   const names = new Set(workspacePackages(root).map(({ manifest }) => manifest.name))
   const rootManifest = join(workspaceRoot, 'package.json')
   if (existsSync(rootManifest)) names.add(JSON.parse(readFileSync(rootManifest, 'utf8')).name)
@@ -53,46 +53,39 @@ const workflowJob = (source, id) => {
 
 export const checkArchitecture = root => {
   const failures = []
-  const canonicalGoModule = 'github.com/NAMEWTA/go-admin-plus/go-admin-plus'
+  const canonicalGoModule = 'github.com/NAMEWTA/go-admin-plus/backend'
   const canonicalWorkspaceName = '@go-admin-plus/workspace'
   const canonicalTaskVersion = '3.48.0'
-  const canonicalVerification = {
-    test: 'task test',
-    typecheck: 'pnpm --dir go-admin-plus-ui typecheck',
-    lint: 'task lint',
-    build: 'task build TARGET=all PROFILE=server-sqlite'
-  }
   const required = [
-    'Taskfile.yml', '.github/workflows/ci.yml', 'go-admin-plus/go.mod',
-    'go-admin-plus/cmd/go-admin-plus/main.go', 'go-admin-plus/cmd/desktop-sidecar/main.go',
-    'go-admin-plus/internal/app/product/registry.go', 'go-admin-plus/internal/modules',
-    'go-admin-plus-ui/package.json', 'go-admin-plus-ui/pnpm-workspace.yaml',
-    'go-admin-plus-ui/tests/shell/vitest.config.ts',
-    'go-admin-plus-ui/tests/shell/node-tests.mjs',
-    'go-admin-plus-ui/apps/admin-web/package.json',
-    'go-admin-plus-ui/apps/admin-desktop/src-tauri/tauri.conf.json',
-    'scripts/go-admin-plus/pnpm.sh',
-    'scripts/go-admin-plus-ui/build.sh',
-    'scripts/go-admin-plus-ui/package.sh',
-    'speculo/.speculo/specdev/config.json'
+    'Taskfile.yml', '.github/workflows/ci.yml', 'backend/go.mod',
+    'backend/cmd/server/main.go', 'backend/cmd/desktop-sidecar/main.go',
+    'backend/internal/app/product/registry.go', 'backend/internal/modules',
+    'frontend/package.json', 'frontend/pnpm-workspace.yaml',
+    'frontend/tests/shell/vitest.config.ts',
+    'frontend/tests/shell/node-tests.mjs',
+    'frontend/apps/admin-web/package.json',
+    'frontend/apps/admin-desktop/src-tauri/tauri.conf.json',
+    'scripts/backend/pnpm.sh',
+    'scripts/frontend/build.sh',
+    'scripts/frontend/package.sh'
   ]
-  const forbidden = ['go-admin-ui-plus', 'go-admin-plus/app', 'go-admin-plus/common', 'go-admin-plus/api', 'go-admin-plus/cmd/go-admin-desktop', 'go-admin-plus/cmd/config-check', 'go-admin-plus/cmd/migrate']
+  const forbidden = ['go-admin-ui-plus', 'backend/app', 'backend/common', 'backend/api', 'backend/cmd/go-admin-desktop', 'backend/cmd/config-check', 'backend/cmd/migrate']
   for (const path of required) if (!existsSync(join(root, path))) failures.push(`missing canonical path: ${path}`)
   for (const path of forbidden) if (existsSync(join(root, path))) failures.push(`removed path still exists: ${path}`)
 
-  const goModulePath = join(root, 'go-admin-plus/go.mod')
+  const goModulePath = join(root, 'backend/go.mod')
   if (existsSync(goModulePath)) {
     const declaration = readFileSync(goModulePath, 'utf8').match(/^module\s+(\S+)$/m)?.[1]
     if (declaration !== canonicalGoModule) failures.push(`Go module path must be ${canonicalGoModule}`)
   }
 
-  const frontendManifestPath = join(root, 'go-admin-plus-ui/package.json')
+  const frontendManifestPath = join(root, 'frontend/package.json')
   let frontendManifest
   if (existsSync(frontendManifestPath)) {
     frontendManifest = JSON.parse(readFileSync(frontendManifestPath, 'utf8'))
     if (frontendManifest.name !== canonicalWorkspaceName) failures.push(`frontend workspace name must be ${canonicalWorkspaceName}`)
     const firstTypecheckCommand = frontendManifest.scripts?.typecheck?.split('&&', 1)[0]?.trim()
-    if (firstTypecheckCommand !== 'pnpm --recursive --if-present typecheck') {
+    if (firstTypecheckCommand !== 'corepack pnpm --recursive --if-present typecheck') {
       failures.push('frontend root typecheck must recursively run every workspace package typecheck script')
     }
     if (!frontendManifest.scripts?.test?.includes('node tests/shell/node-tests.mjs')) {
@@ -108,14 +101,6 @@ export const checkArchitecture = root => {
     }
   }
 
-  const specDevConfigPath = join(root, 'speculo/.speculo/specdev/config.json')
-  if (existsSync(specDevConfigPath)) {
-    const verification = JSON.parse(readFileSync(specDevConfigPath, 'utf8')).verification ?? {}
-    for (const [name, command] of Object.entries(canonicalVerification)) {
-      if (verification[name] !== command) failures.push(`SpecDev verification.${name} must be ${command}`)
-    }
-  }
-
   const packageNames = workspacePackageNames(root)
   const commandRoots = ['.github', 'scripts', 'release', 'deploy']
   const surfaces = [join(root, 'Taskfile.yml'), ...commandRoots.flatMap(path => commandFiles(join(root, path)))]
@@ -126,7 +111,7 @@ export const checkArchitecture = root => {
     }
   }
 
-  const packageScriptPath = join(root, 'scripts/go-admin-plus-ui/package.sh')
+  const packageScriptPath = join(root, 'scripts/frontend/package.sh')
   if (existsSync(packageScriptPath)) {
     const packageScript = readFileSync(packageScriptPath, 'utf8')
     const requiredPackageContracts = [
@@ -144,7 +129,7 @@ export const checkArchitecture = root => {
     if (/pnpm build:prod/.test(packageScript)) failures.push('local package script must not invoke the aggregate frontend build')
   }
 
-  const buildScriptPath = join(root, 'scripts/go-admin-plus-ui/build.sh')
+  const buildScriptPath = join(root, 'scripts/frontend/build.sh')
   if (existsSync(buildScriptPath)) {
     const buildScript = readFileSync(buildScriptPath, 'utf8')
     if (!/node "\$repo_root\/release\/shared\/sidecar\/build\.mjs" --host/.test(buildScript)) {
@@ -165,7 +150,7 @@ export const checkArchitecture = root => {
     if (/pnpm build:prod/.test(buildScript)) failures.push('product build must not stop at aggregate WebView assets')
   }
 
-  const frontendTaskScriptRoot = join(root, 'scripts/go-admin-plus-ui')
+  const frontendTaskScriptRoot = join(root, 'scripts/frontend')
   if (existsSync(frontendTaskScriptRoot)) {
     for (const entry of readdirSync(frontendTaskScriptRoot, { withFileTypes: true })) {
       if (!entry.isFile() || extname(entry.name) !== '.sh' || entry.name === 'common.sh') continue
@@ -209,16 +194,16 @@ export const checkArchitecture = root => {
     for (const [contract, message] of securityContracts) if (!securityJob.includes(contract)) failures.push(message)
     if (/continue-on-error:|\|\|\s*true/.test(securityJob)) failures.push('security CI must not allow failures')
     const desktopJob = workflowJob(ciWorkflow, 'desktop-rust')
-    if (!/pnpm --dir go-admin-plus-ui install --frozen-lockfile/.test(desktopJob)) {
+    if (!/pnpm --dir frontend install --frozen-lockfile/.test(desktopJob)) {
       failures.push('Desktop CI must install the frozen frontend workspace')
     }
     if (!/node release\/shared\/sidecar\/build\.mjs --host/.test(desktopJob)) {
       failures.push('Desktop CI must stage the host Go sidecar')
     }
-    if (!/pnpm --dir go-admin-plus-ui --filter @go-admin-plus\/admin-desktop tauri build \\\n+\s+--features custom-protocol --no-bundle/.test(desktopJob)) {
+    if (!/pnpm --dir frontend --filter @go-admin-plus\/admin-desktop tauri build \\\n+\s+--features custom-protocol --no-bundle/.test(desktopJob)) {
       failures.push('Desktop CI must link the Tauri host without bundling')
     }
-    if (!/node go-admin-plus-ui\/apps\/admin-desktop\/scripts\/verify-build\.mjs/.test(desktopJob)) {
+    if (!/node frontend\/apps\/admin-desktop\/scripts\/verify-build\.mjs/.test(desktopJob)) {
       failures.push('Desktop CI must verify production WebView, sidecar, and host artifacts')
     }
   }
@@ -249,10 +234,10 @@ export const checkArchitecture = root => {
     for (const contract of ['useDefault = true', '0391c8816cb97e8c68e61ec7ef56715046f8115f', 'condition = "AND"', 'regexTarget = "line"']) {
       if (!gitleaksPolicy.includes(contract)) failures.push(`gitleaks policy is missing required narrow allowlist contract: ${contract}`)
     }
-    if (/\.\*test\\\.go|go-admin-plus\/internal\/.*\*\*/.test(gitleaksPolicy)) failures.push('gitleaks policy must not allowlist broad test or source paths')
+    if (/\.\*test\\\.go|backend\/internal\/.*\*\*/.test(gitleaksPolicy)) failures.push('gitleaks policy must not allowlist broad test or source paths')
   }
 
-  const pnpmResolverPath = join(root, 'scripts/go-admin-plus/pnpm.sh')
+  const pnpmResolverPath = join(root, 'scripts/backend/pnpm.sh')
   if (existsSync(pnpmResolverPath)) {
     const pnpmResolver = readFileSync(pnpmResolverPath, 'utf8')
     const requiredPnpmContracts = [
@@ -265,7 +250,7 @@ export const checkArchitecture = root => {
     }
   }
 
-  for (const relativePath of ['scripts/go-admin-plus/dev.sh', 'scripts/go-admin-plus/test.sh']) {
+  for (const relativePath of ['scripts/backend/dev.sh', 'scripts/backend/test.sh']) {
     const path = join(root, relativePath)
     if (existsSync(path) && !readFileSync(path, 'utf8').includes('require_pnpm')) {
       failures.push(`${relativePath} must prepare the managed pnpm toolchain`)
@@ -281,7 +266,7 @@ export const checkArchitecture = root => {
     }
   }
 
-  const taskContractPath = join(root, 'scripts/go-admin-plus/task-contract.sh')
+  const taskContractPath = join(root, 'scripts/backend/task-contract.sh')
   if (existsSync(taskContractPath)) {
     const taskContract = readFileSync(taskContractPath, 'utf8')
     const requiredTaskChecks = [
@@ -315,28 +300,28 @@ export const checkArchitecture = root => {
     }
   }
 
-  const internalRoot = join(root, 'go-admin-plus/internal')
+  const internalRoot = join(root, 'backend/internal')
   if (existsSync(internalRoot)) {
     const allowed = new Set(['app', 'application', 'contracts', 'host', 'modules', 'platform'])
     for (const entry of readdirSync(internalRoot, { withFileTypes: true })) {
       if (entry.isDirectory() && !allowed.has(entry.name)) failures.push(`backend layer is outside the canonical architecture: internal/${entry.name}`)
     }
   }
-  const commandRoot = join(root, 'go-admin-plus/cmd')
+  const commandRoot = join(root, 'backend/cmd')
   if (existsSync(commandRoot)) {
-    const allowed = new Set(['desktop-sidecar', 'go-admin-plus'])
+    const allowed = new Set(['desktop-sidecar', 'server'])
     for (const entry of readdirSync(commandRoot, { withFileTypes: true })) {
       if (entry.isDirectory() && !allowed.has(entry.name)) failures.push(`backend command is outside the canonical command plane: cmd/${entry.name}`)
     }
   }
-  const workspacePath = join(root, 'go-admin-plus-ui/pnpm-workspace.yaml')
+  const workspacePath = join(root, 'frontend/pnpm-workspace.yaml')
   if (existsSync(workspacePath)) {
     const workspace = readFileSync(workspacePath, 'utf8')
     for (const pattern of ['apps/*', 'packages/*', 'packages/adapters/*', 'packages/domains/*', 'packages/web-domains/*']) {
       if (!workspace.includes(pattern)) failures.push(`workspace does not declare ${pattern}`)
     }
   }
-  const frontendTestConfigPath = join(root, 'go-admin-plus-ui/tests/shell/vitest.config.ts')
+  const frontendTestConfigPath = join(root, 'frontend/tests/shell/vitest.config.ts')
   if (existsSync(frontendTestConfigPath)) {
     const config = readFileSync(frontendTestConfigPath, 'utf8')
     if (!/['"]packages\/\*\*\/\*\.spec\.ts['"]/.test(config)) {
@@ -347,7 +332,7 @@ export const checkArchitecture = root => {
     }
   }
   if (frontendManifest) {
-    const frontendRoot = join(root, 'go-admin-plus-ui')
+    const frontendRoot = join(root, 'frontend')
     const typecheck = frontendManifest.scripts?.typecheck ?? ''
     const testProjects = commandFiles(join(frontendRoot, 'tests')).filter(path => basename(path) === 'tsconfig.json')
     for (const project of testProjects) {

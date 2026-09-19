@@ -1,15 +1,7 @@
-# Windows x64 Release
+# Windows x64 桌面发行
 
-`identity.json` is the canonical Windows release contract. The only release artifact is a
-Tauri 2 x64 NSIS installer produced automatically when an exact semver tag is pushed.
+`identity.json` 定义 Windows x64 Tauri 2 NSIS 制品。安装器按用户安装，提供目录选择并包含 WebView2 离线安装包；当前发行未签名。
 
-The installer is intentionally unsigned for private self-use. Windows SmartScreen or Defender may
-show a warning; continue only on a machine you control. The NSIS installer is current-user scoped,
-shows the normal destination chooser, and embeds the WebView2 offline installer.
+程序目录只保存安装文件。本地数据库、文件、备份与凭证保险库位于 `%LOCALAPPDATA%\com.goadmin.plus\data`，日志位于 `%LOCALAPPDATA%\com.goadmin.plus\logs`。卸载保留用户数据。
 
-Choose the installation directory during setup. The application stores its SQLite database, files,
-backups, logs, and desktop runtime state below `<install-directory>\\data` and
-`<install-directory>\\logs`; moving or replacing the directory without backing it up can lose data.
-Uninstall removes installed binaries and leaves runtime-created data for recovery. The release
-workflow smoke-tests a non-default installation path, first launch, login, CRUD, restart, and data
-persistence.
+首次启动可选择本地 SQLite 或远程 HTTPS 服务。实际安装、登录、角色 CRUD、重启和卸载保留数据由 Windows runner 验收，不能由其他平台的编译结果替代。

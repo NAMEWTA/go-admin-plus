@@ -13,6 +13,25 @@ servers:
 security:
   - SessionCookie: []
 paths:
+  /runtime/info:
+    get:
+      operationId: getRuntimeInfo
+      summary: Public protocol version and upload limits
+      security: []
+      responses:
+        '200':
+          description: Non-sensitive runtime capabilities.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [apiVersion, modules, maxUploadBytes, allowedTypes]
+                properties:
+                  apiVersion: {type: integer, const: 1}
+                  modules: {type: array, items: {type: string}}
+                  maxUploadBytes: {type: integer, minimum: 1, maximum: 1073741824}
+                  allowedTypes: {type: array, items: {type: string}}
   /iam/session/login:
     $ref: ./modules/iam-session.yaml#/paths/~1iam~1session~1login
   /iam/session/current:
@@ -65,18 +84,14 @@ paths:
     $ref: ./modules/scheduler.yaml#/paths/~1scheduler~1definitions
   /scheduler/definitions/{definitionId}:
     $ref: ./modules/scheduler.yaml#/paths/~1scheduler~1definitions~1{definitionId}
+  /scheduler/definitions/{definitionId}/run:
+    $ref: './modules/scheduler.yaml#/paths/~1scheduler~1definitions~1{definitionId}~1run'
   /scheduler/definitions/{definitionId}/enable:
     $ref: ./modules/scheduler.yaml#/paths/~1scheduler~1definitions~1{definitionId}~1enable
   /scheduler/definitions/{definitionId}/stop:
     $ref: ./modules/scheduler.yaml#/paths/~1scheduler~1definitions~1{definitionId}~1stop
   /scheduler/executions:
     $ref: ./modules/scheduler.yaml#/paths/~1scheduler~1executions
-  /demo/products:
-    $ref: ./modules/demo.yaml#/paths/~1demo~1products
-  /demo/products/batch-delete:
-    $ref: ./modules/demo.yaml#/paths/~1demo~1products~1batch-delete
-  /demo/products/{productId}:
-    $ref: ./modules/demo.yaml#/paths/~1demo~1products~1{productId}
   /files/objects:
     $ref: ./modules/files.yaml#/paths/~1files~1objects
   /files/objects/batch-delete:

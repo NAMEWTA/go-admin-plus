@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "outputs": [
+    "backend/internal/modules/audit/transport/openapi.gen.go",
+    "backend/internal/modules/audit/transport/openapi.json",
+    "backend/internal/modules/audit/transport/openapi.manifest.json",
+    "frontend/packages/domains/audit/src/generated/client.ts",
+    "frontend/packages/domains/audit/src/generated/schema.ts"
+  ]
+}
