@@ -22,6 +22,8 @@ func TestBuildSQLiteURIIsPlatformIndependent(t *testing.T) {
 		{name: "posix", path: "/var/lib/app data/db#one?.sqlite", wantEscaped: "/var/lib/app%20data/db%23one%3F.sqlite"},
 		{name: "posix backslash filename", path: `/var/lib/a\b.sqlite`, wantEscaped: "/var/lib/a%5Cb.sqlite"},
 		{name: "windows drive", path: `C:\Program Files\App\db#one?.sqlite`, wantEscaped: "/C:/Program%20Files/App/db%23one%3F.sqlite"},
+		{name: "windows extended drive", path: `\\?\C:\Program Files\App\db#one?.sqlite`, wantEscaped: "/C:/Program%20Files/App/db%23one%3F.sqlite"},
+		{name: "windows extended UNC", path: `\\?\UNC\fileserver\shared data\App\db.sqlite`, wantEscaped: "//fileserver/shared%20data/App/db.sqlite"},
 		{name: "unc backslash", path: `\\fileserver\shared data\App\db#one?.sqlite`, wantEscaped: "//fileserver/shared%20data/App/db%23one%3F.sqlite"},
 		{name: "unc slash", path: `//fileserver/shared data/App/db#one?.sqlite`, wantEscaped: "//fileserver/shared%20data/App/db%23one%3F.sqlite"},
 	}
@@ -78,7 +80,7 @@ func TestSQLiteUNCURIHasDriverAcceptedEmptyAuthority(t *testing.T) {
 func TestBuildSQLiteURIRejectsNonAbsolutePaths(t *testing.T) {
 	t.Parallel()
 
-	for _, path := range []string{"", "relative/app.db", `C:relative\app.db`, `\\server`} {
+	for _, path := range []string{"", "relative/app.db", `C:relative\app.db`, `\\server`, `\\?\C:relative\app.db`, `\\?\Volume{invalid}\app.db`, `\\?\UNC\server`} {
 		if _, err := buildSQLiteURI(path); err == nil {
 			t.Fatalf("buildSQLiteURI(%q) unexpectedly succeeded", path)
 		}

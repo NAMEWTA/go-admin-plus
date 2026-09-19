@@ -178,6 +178,8 @@ jobs:
           rustup target add x86_64-pc-windows-msvc
           pnpm --dir frontend install --frozen-lockfile
           go -C backend mod download
+          go -C backend test ./internal/app/product -run '^TestDesktopHostWindowsExtendedPaths$' -count=1 -v
+          if ($LASTEXITCODE -ne 0) { throw 'Windows desktop backend path verification failed.' }
           cargo install tauri-driver --version 2.0.6 --locked
           $edge = Get-Item "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
           $edgeVersion = $edge.VersionInfo.ProductVersion

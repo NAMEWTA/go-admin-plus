@@ -244,6 +244,9 @@ jobs:
           rustup default 1.96.0
       - name: Install frontend workspace
         run: pnpm --dir frontend install --frozen-lockfile
+      - name: Verify Windows desktop backend paths
+        if: runner.os == 'Windows'
+        run: go -C backend test ./internal/app/product -run '^TestDesktopHostWindowsExtendedPaths$' -count=1 -v
       - name: Verify and build native host
         run: |
           go -C backend mod download

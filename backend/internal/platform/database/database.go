@@ -230,6 +230,18 @@ func buildSQLiteURI(databasePath string) (string, error) {
 	if databasePath == "" {
 		return "", errors.New("sqlite database path is required")
 	}
+	// Rust canonicalize 在 Windows 返回扩展路径。SQLite URI 不认识设备前缀，
+	// 只将本地盘符和 UNC 文件路径转换为等价路径，拒绝其他设备命名空间。
+	if strings.HasPrefix(databasePath, `\\?\`) {
+		path := strings.TrimPrefix(databasePath, `\\?\`)
+		if len(path) >= 4 && strings.EqualFold(path[:4], `UNC\`) {
+			databasePath = `\\` + path[4:]
+		} else if isWindowsDrivePath(path) {
+			databasePath = path
+		} else {
+			return "", errors.New("sqlite extended path is invalid")
+		}
+	}
 	uri := url.URL{Scheme: "file"}
 	switch {
 	case strings.HasPrefix(databasePath, `\\`) || strings.HasPrefix(databasePath, "//"):
