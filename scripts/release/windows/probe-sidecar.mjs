@@ -1,7 +1,7 @@
 // 一次性 Windows runner 中诊断 sidecar 的最小操作系统环境，不读取真实用户数据。
 import { spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -26,7 +26,7 @@ fn main() {
 const build = spawnSync('rustc', ['--edition=2024', source, '-o', executable], { stdio: 'inherit' })
 if (build.status !== 0) throw new Error('environment probe launcher could not be built')
 for (const name of ['inherited', 'empty', 'system-root']) {
-  const root = await mkdtemp(join(tmpdir(), 'go-admin-sidecar-probe-'))
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'go-admin-sidecar-probe-')))
   const data = join(root, 'data')
   const logs = join(root, 'logs')
   await mkdir(data)

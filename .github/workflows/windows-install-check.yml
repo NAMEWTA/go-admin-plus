@@ -5,9 +5,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Existing release tag to build and verify
+        description: Application version to build and verify
         required: true
         default: '0.0.3'
+      source_ref:
+        description: Optional immutable candidate commit; defaults to the release tag
+        required: false
+        default: ''
       installer_run:
         description: Optional run ID whose saved installer should be reverified
         required: false
@@ -31,7 +35,7 @@ jobs:
           git config --global core.eol lf
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: refs/tags/${{ inputs.version }}
+          ref: ${{ inputs.source_ref || format('refs/tags/{0}', inputs.version) }}
           fetch-depth: 0
           persist-credentials: false
       - name: Record immutable application source
@@ -42,7 +46,7 @@ jobs:
           if ($config.version -ne $env:RELEASE_VERSION) { throw 'Application version does not match the tag.' }
           $source = git rev-parse HEAD
           "SOURCE_SHA=$source" | Out-File -FilePath $env:GITHUB_ENV -Append
-      # 应用始终从标签构建；验证脚本独立更新，修复测试工具时无需重编安装包。
+      # 候选提交在打标签前验收；缓存绑定应用提交，验证脚本可独立修复。
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
@@ -77,7 +81,7 @@ jobs:
           if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'fc5ffaeffb993576ece9c791da5a688fb2c8969a1479bbfe58583672c64da336') { throw 'Syft checksum mismatch.' }
           Expand-Archive $archive -DestinationPath (Join-Path $env:RUNNER_TEMP 'syft')
           "$env:RUNNER_TEMP\syft" | Out-File -FilePath $env:GITHUB_PATH -Append
-      - name: Build tagged installer
+      - name: Build candidate installer
         if: inputs.installer_run == ''
         shell: pwsh
         run: |
@@ -87,7 +91,7 @@ jobs:
           pnpm --dir frontend install --frozen-lockfile
           if ($LASTEXITCODE -ne 0) { throw 'Frontend dependencies unavailable.' }
           ./scripts/release/windows/build-nsis.ps1 -Version $env:RELEASE_VERSION -OutputDirectory release-output
-          if ($LASTEXITCODE -ne 0) { throw 'Tagged installer build failed.' }
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate installer build failed.' }
           @{version=$env:RELEASE_VERSION;sourceSha=$env:SOURCE_SHA} | ConvertTo-Json | Set-Content release-output/build-source.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: inputs.installer_run == ''
@@ -108,7 +112,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $source = Get-Content release-output/build-source.json -Raw | ConvertFrom-Json
-          if ($source.version -ne $env:RELEASE_VERSION -or $source.sourceSha -ne $env:SOURCE_SHA) { throw 'Cached installer does not match the tag.' }
+          if ($source.version -ne $env:RELEASE_VERSION -or $source.sourceSha -ne $env:SOURCE_SHA) { throw 'Cached installer does not match the source commit.' }
           $output = (Resolve-Path release-output).Path
           $installer = Join-Path $output "go-admin-plus-$env:RELEASE_VERSION-windows-x64-setup.exe"
           $evidence = Join-Path $output 'install-evidence.json'
@@ -118,6 +122,13 @@ jobs:
           New-Item -ItemType Directory -Path (Split-Path $diagnosticSource) | Out-Null
           $main = Get-Content backend/cmd/desktop-sidecar/main.go -Raw
           $main.Replace('fmt.Fprintln(os.Stderr, "desktop sidecar failed")', 'fmt.Fprintln(os.Stderr, "desktop sidecar failed:", err)') | Set-Content $diagnosticSource
+          $hostSource = 'backend/internal/host/desktop/host.go'
+          $hostCode = Get-Content $hostSource -Raw
+          $hostCode.Replace('return err', 'fmt.Fprintln(os.Stderr, "diagnostic stage:", err); return err') | Set-Content $hostSource
+          $directorySource = 'backend/internal/platform/desktop/directory.go'
+          $directoryCode = Get-Content $directorySource -Raw
+          $directoryCode = $directoryCode.Replace('"errors"', '"errors"; "fmt"')
+          $directoryCode.Replace('return "", errors.New("desktop directory is not canonical")', 'fmt.Fprintf(os.Stderr, "canonical mismatch: requested=%q resolved=%q error=%v\n", directory, real, err); return "", errors.New("desktop directory is not canonical")') | Set-Content $directorySource
           go -C backend build -o $diagnosticBinary $diagnosticSource
           if ($LASTEXITCODE -ne 0) { throw 'Diagnostic sidecar build failed.' }
           node ./.release-tools/scripts/release/windows/probe-sidecar.mjs $diagnosticBinary
