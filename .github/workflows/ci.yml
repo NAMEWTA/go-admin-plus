@@ -247,6 +247,7 @@ jobs:
       - name: Verify and build native host
         run: |
           node release/shared/sidecar/build.mjs --host
+          pnpm --dir frontend --filter @go-admin-plus/admin-desktop build
           cargo fmt --manifest-path frontend/apps/admin-desktop/src-tauri/Cargo.toml --check
           cargo test --manifest-path frontend/apps/admin-desktop/src-tauri/Cargo.toml --locked --features custom-protocol
           cargo clippy --manifest-path frontend/apps/admin-desktop/src-tauri/Cargo.toml --locked --all-targets --features custom-protocol -- -D warnings
