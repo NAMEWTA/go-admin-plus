@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)] [string] $InstallerFile,
-    [Parameter(Mandatory = $true)] [string] $EvidenceFile
+    [Parameter(Mandatory = $true)] [string] $EvidenceFile,
+    [string] $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
 )
 
 $ErrorActionPreference = 'Stop'
@@ -9,7 +10,7 @@ Set-StrictMode -Version Latest
 if ($env:CI -ne 'true' -or $env:GITHUB_ACTIONS -ne 'true' -or [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     throw 'Install verification is restricted to an ephemeral GitHub Actions runner.'
 }
-$repository = (Resolve-Path (Join-Path $PSScriptRoot '../../..')).Path
+$repository = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $identity = Get-Content -LiteralPath (Join-Path $repository 'release/windows/identity.json') -Raw | ConvertFrom-Json
 $installer = (Resolve-Path -LiteralPath $InstallerFile).Path
 $installDirectory = Join-Path $env:RUNNER_TEMP "go-admin-plus-install-$([guid]::NewGuid().ToString('N'))"
@@ -61,8 +62,33 @@ New-Item -ItemType Directory -Path $configRoot -Force | Out-Null
 & go -C (Join-Path $repository 'backend') run ./test/desktop/fixture --root $appDataRoot --mode previous
 if ($LASTEXITCODE -ne 0) { throw 'Installed desktop fixture preparation failed.' }
 $traceFile = Join-Path $env:RUNNER_TEMP "desktop-trace-$([guid]::NewGuid().ToString('N')).json"
-& node (Join-Path $PSScriptRoot 'trace-installed.mjs') --application $application --evidence $traceFile
-if ($LASTEXITCODE -ne 0) { throw 'Installed desktop UI verification failed.' }
+# GitHub Windows runner 使用提升权限；新版 WebView2 忽略环境变量和 HKCU 调试参数。
+# 仅在一次性 runner 中为本应用设置 HKLM 参数，退出时立即清除，不改动生产二进制。
+$policyPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+$policyNames = @('go-admin-plus-desktop.exe', $identity.bundleIdentifier)
+foreach ($name in $policyNames) {
+    if (Test-Path -LiteralPath $policyPath) {
+        if ($null -ne (Get-Item -LiteralPath $policyPath).GetValue($name)) { throw 'Existing WebView2 policy must not be modified.' }
+    }
+}
+$listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+$listener.Start()
+$debugPort = $listener.LocalEndpoint.Port
+$listener.Stop()
+$env:GO_ADMIN_WINDOWS_CDP_PORT = [string]$debugPort
+if (-not (Test-Path -LiteralPath $policyPath)) { New-Item -Path $policyPath -Force | Out-Null }
+try {
+    foreach ($name in $policyNames) {
+        New-ItemProperty -LiteralPath $policyPath -Name $name -PropertyType String -Value "--remote-debugging-port=$debugPort --remote-debugging-address=127.0.0.1" | Out-Null
+    }
+    & node (Join-Path $PSScriptRoot 'trace-installed.mjs') --application $application --evidence $traceFile
+    if ($LASTEXITCODE -ne 0) { throw 'Installed desktop UI verification failed.' }
+} finally {
+    foreach ($name in $policyNames) {
+        Remove-ItemProperty -LiteralPath $policyPath -Name $name -ErrorAction SilentlyContinue
+    }
+    Remove-Item Env:GO_ADMIN_WINDOWS_CDP_PORT -ErrorAction SilentlyContinue
+}
 $trace = Get-Content -LiteralPath $traceFile -Raw | ConvertFrom-Json
 $database = Join-Path $dataRoot 'go-admin-plus.db'
 

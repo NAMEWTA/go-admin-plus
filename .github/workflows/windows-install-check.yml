@@ -1,0 +1,122 @@
+name: Windows installed release verification
+run-name: Windows installed release ${{ inputs.version }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing release tag to build and verify
+        required: true
+        default: '0.0.3'
+      installer_run:
+        description: Optional run ID whose saved installer should be reverified
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - name: Configure byte-exact checkout
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: refs/tags/${{ inputs.version }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record immutable application source
+        shell: pwsh
+        run: |
+          if ($env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+$') { throw 'Exact release tag required.' }
+          $config = Get-Content frontend/apps/admin-desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          if ($config.version -ne $env:RELEASE_VERSION) { throw 'Application version does not match the tag.' }
+          $source = git rev-parse HEAD
+          "SOURCE_SHA=$source" | Out-File -FilePath $env:GITHUB_ENV -Append
+      # 应用始终从标签构建；验证脚本独立更新，修复测试工具时无需重编安装包。
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: .release-tools
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+        with:
+          version: 11.1.3
+          run_install: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.22.3
+      - name: Prepare tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          go -C backend mod download
+          if ($LASTEXITCODE -ne 0) { throw 'Go dependencies unavailable.' }
+          $edge = Get-Item "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe"
+          $edgeVersion = $edge.VersionInfo.ProductVersion
+          $driverDirectory = Join-Path $env:RUNNER_TEMP 'edge-driver'
+          $driverArchive = Join-Path $env:RUNNER_TEMP 'edge-driver.zip'
+          Invoke-WebRequest "https://msedgedriver.microsoft.com/$edgeVersion/edgedriver_win64.zip" -OutFile $driverArchive
+          Expand-Archive $driverArchive -DestinationPath $driverDirectory
+          $driverDirectory | Out-File -FilePath $env:GITHUB_PATH -Append
+          $archive = Join-Path $env:RUNNER_TEMP 'syft.zip'
+          Invoke-WebRequest 'https://github.com/anchore/syft/releases/download/v1.51.0/syft_1.51.0_windows_amd64.zip' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant() -ne 'fc5ffaeffb993576ece9c791da5a688fb2c8969a1479bbfe58583672c64da336') { throw 'Syft checksum mismatch.' }
+          Expand-Archive $archive -DestinationPath (Join-Path $env:RUNNER_TEMP 'syft')
+          "$env:RUNNER_TEMP\syft" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Build tagged installer
+        if: inputs.installer_run == ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+          pnpm --dir frontend install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend dependencies unavailable.' }
+          ./scripts/release/windows/build-nsis.ps1 -Version $env:RELEASE_VERSION -OutputDirectory release-output
+          if ($LASTEXITCODE -ne 0) { throw 'Tagged installer build failed.' }
+          @{version=$env:RELEASE_VERSION;sourceSha=$env:SOURCE_SHA} | ConvertTo-Json | Set-Content release-output/build-source.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: inputs.installer_run == ''
+        with:
+          name: windows-installer-${{ inputs.version }}
+          path: release-output
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e
+        if: inputs.installer_run != ''
+        with:
+          name: windows-installer-${{ inputs.version }}
+          run-id: ${{ inputs.installer_run }}
+          github-token: ${{ github.token }}
+          path: release-output
+      - name: Verify installed application and emit release evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = Get-Content release-output/build-source.json -Raw | ConvertFrom-Json
+          if ($source.version -ne $env:RELEASE_VERSION -or $source.sourceSha -ne $env:SOURCE_SHA) { throw 'Cached installer does not match the tag.' }
+          $output = (Resolve-Path release-output).Path
+          $installer = Join-Path $output "go-admin-plus-$env:RELEASE_VERSION-windows-x64-setup.exe"
+          $evidence = Join-Path $output 'install-evidence.json'
+          ./.release-tools/scripts/release/windows/verify-install.ps1 -InstallerFile $installer -EvidenceFile $evidence -RepositoryRoot (Get-Location).Path
+          ./scripts/release/windows/emit-artifacts.ps1 -Version $env:RELEASE_VERSION -SourceSha $env:SOURCE_SHA -InstallerFile $installer -ApplicationFile (Join-Path $output 'go-admin-plus-desktop.exe') -InstallEvidenceFile $evidence -OutputDirectory release-evidence
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: release-windows
+          path: release-evidence
+          if-no-files-found: error
+          retention-days: 7
