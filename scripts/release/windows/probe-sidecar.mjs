@@ -17,14 +17,15 @@ use std::os::windows::process::CommandExt;
 fn main() {
     let args: Vec<String> = env::args().collect();
     let mut child = Command::new(&args[1]);
-    child.env_clear().stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit()).creation_flags(0x08000000);
+    if args[2] != "inherited" { child.env_clear(); }
+    child.stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit()).creation_flags(0x08000000);
     if args[2] == "system-root" { child.env("SystemRoot", env::var_os("SystemRoot").expect("SystemRoot missing")); }
     let status = child.status().expect("sidecar spawn failed");
     std::process::exit(status.code().unwrap_or(1));
 }`)
 const build = spawnSync('rustc', ['--edition=2024', source, '-o', executable], { stdio: 'inherit' })
 if (build.status !== 0) throw new Error('environment probe launcher could not be built')
-for (const name of ['empty', 'system-root']) {
+for (const name of ['inherited', 'empty', 'system-root']) {
   const root = await mkdtemp(join(tmpdir(), 'go-admin-sidecar-probe-'))
   const data = join(root, 'data')
   const logs = join(root, 'logs')
