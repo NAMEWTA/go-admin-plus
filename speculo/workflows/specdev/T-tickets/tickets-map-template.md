@@ -1,5 +1,9 @@
 ---
 schema_version: 3
+plan_contract_version: 1
+plan_revision: 1
+requested_deliverables: []
+deliverable_policy: unreviewed
 artifact: tickets-map
 change: <YYYY-MM-DD-topic>
 status: draft
@@ -16,6 +20,20 @@ status: draft
 ## 1. 目标与拆分策略
 
 引用主要用户故事、验收合同和架构决策，说明所有 Ticket 共同交付的目标、切片原则、prefactor 和 expand-contract 选择。不要复制整个 Spec。
+
+### 总体实施背景
+
+记录所有 Ticket 共同依赖、但不属于单个 Ticket 的模块边界、公共契约、关键不变量、集成顺序和不可重复决定。实现者用本节理解全局目标；单 Ticket 的完整实现契约仍由对应 Ticket 拥有。
+
+### 项目 Skill 读取矩阵
+
+每个 Ticket 的 Lead 或 implementation subagent 都必须先完整读取本 Map，再读取候选项目 Skill 的 frontmatter 与入口；只有适用于 `ALL` 或当前 Ticket ID、且 scope/路径/技术域/验证条件命中的 Skill 才完整读取，最后进入当前 Ticket。下表是发布时已确认的**最低必读集合，不是 Skill allowlist**；项目 Agent 指令或实现范围触发其他项目 Skill 时，先定位并读取其入口，由 Lead 更新本 Map、重新校验后继续。
+
+项目 Skill 使用项目根相对 Path，例如 `<Path>.agents/skills/{skill-name}/SKILL.md</Path>`；不得写机器绝对路径。若没有适用项目 Skill，保留一行 `无（已扫描项目 Skill 入口，未发现适用项）`，并在 Trigger / Scope 中记录实际扫描范围。
+
+| Applies To | Project Skill | Trigger / Scope | Read Timing | Purpose |
+|---|---|---|---|---|
+| ALL | 无（已扫描项目 Skill 入口，未发现适用项） | `<Path>.agents/skills/**/SKILL.md</Path>` 与项目 Agent 指令声明的 Skill 根 | Map 后、Ticket 前 | 明确当前 change 没有额外项目 Skill 读取要求 |
 
 ## 2. 执行清单
 
@@ -68,6 +86,17 @@ T-tickets 可以标注候选 Wave、E2E disposition 和行为里程碑。需要�
 
 - Ticket 状态变化后同步执行清单；
 - Ticket ID、路径、依赖或 frontmatter 不一致时，以 Ticket 文件为权威并修复本 Map；
+- 项目 Skill 新增、移动、删除、触发范围变化或实现中发现新的适用 Skill 时，先同步读取矩阵并重新校验；
 - Goal Plan 存在时，Wave、Gate 和 owner 以 `<Path>{roots.state}/specdev/changes/{change}/goal-plan.md</Path>` 为编排权威；
 - 依赖、合同覆盖或路径所有权变化后运行 `<Path>{roots.workflows}/specdev/common/tools/validate-specdev.mjs</Path>`；
 - 内部工件不得使用相对 Markdown 链接。
+
+## 9. 总控与恢复
+
+从本 Map 进入 `<Path>{roots.workflows}/specdev/P-goal-plan/P-goal-plan.md</Path>` 的 plan/run/resume/replan/verify。先运行 `<Path>{roots.workflows}/specdev/common/tools/ticket-control.mjs</Path>` 的 `--map` 只读检查，再按 `<Path>{roots.workflows}/specdev/P-goal-plan/references/map-control.md</Path>` 调用 I 和真实 Skill、验收、更新状态直到完成或明确阻塞；此工具本身不执行代码。
+
+- frontmatter 中 requested_deliverables 用 JSON 对象数组记录用户明确要求的名称与正整数 count；没有额外数量要求时用空数组，并在 deliverable_policy 记录依据，不能保留 unreviewed。
+- requested_deliverables 属于用户交付合同；done 之前按实际产物核对，不从 Ticket 数量推断交付数量。
+- 变更范围或验收后递增 plan_revision 并重算受影响闭包；原完成证据保留，失效证据不得复用。
+- 共享语义资源在 Ticket resource_claims 声明（例如 API、表、迁移序列、正式记忆写集）；不把“不同文件”视为互不冲突。
+- 未闭合事务先查原网关，其他任务冲突只暂停相关部分；全部票 done 后仍需整体 Gate、数量和集成验收。

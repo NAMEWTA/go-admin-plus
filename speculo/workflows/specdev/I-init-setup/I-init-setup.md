@@ -13,6 +13,13 @@ keywords: [初始化, 配置, status, tracking, 验证命令]
 
 首次使用 SpecDev、状态根不存在或治理契约发生变化后运行。此 work 只初始化 SpecDev 的状态与配置，不修改项目业务代码。
 
+## 读取范围
+
+1. 先读取 `<Path>{roots.workflows}/specdev/README.md</Path>` 与当前 Work 的状态入口。
+2. 再读取 `<Path>{roots.workflows}/specdev/common/rules/activation-and-memory.md</Path>`，按当前分支、状态和关键词定位最小相关工件。
+3. 只在本 Work 明确要求恢复、冲突、执行安全或归档证据时扩展为全量读取；缺少匹配证据或 owner/gateway 时停止受影响分支。
+
+
 ## 规范输入
 
 - 工作流运行合同：`<Path>{roots.workflows}/specdev/README.md</Path>`
@@ -28,11 +35,15 @@ keywords: [初始化, 配置, status, tracking, 验证命令]
 
 ### 1. 解析根目录
 
+创建任何状态目录之前，先从 cwd 向上定位并打开 `<Path>{roots.state}/workspace.json</Path>`，校验 `path_base` 与 `roots.*`。只在解析后的状态根下创建 specdev 目录；禁止在声明的状态根之外新建 `.speculo`。
+
 确认：
 
 - 工作流根可解析为 `<Path>{roots.workflows}/specdev/</Path>`；
-- 状态根可解析为 `<Path>{roots.state}/specdev/</Path>`；
+- 状态根可解析为 `<Path>{roots.state}/specdev/</Path>`，且必须来自已打开的 `<Path>{roots.state}/workspace.json</Path>`；
 - 当前用户允许在状态根创建目录和工件。
+
+嵌套安装反例：不得把状态根默认展开成项目根 `.speculo`。项目根 `.speculo/specdev` 非法；init 与 Grill 只写入声明的 `<Path>{roots.state}/specdev/</Path>`。
 
 不得把真实绝对路径写回模板或治理文档；持久化引用继续使用根变量。
 
@@ -55,7 +66,7 @@ keywords: [初始化, 配置, status, tracking, 验证命令]
 仅在上下文未提供时询问：
 
 - 交互语言与持久化工件语言；
-- implementation subagent、集成尝试次数和原型变体上限（初始化时写入 config，Lead 不计入）；
+- implementation subagent、集成尝试次数和 UI 设计候选上限（初始化时写入 config，Lead 不计入）；
 - Deep Ticket 的迁移、发布和不可逆操作是否必须人工批准；
 
 不询问可由仓库事实回答的文件位置、脚本名或默认分支。

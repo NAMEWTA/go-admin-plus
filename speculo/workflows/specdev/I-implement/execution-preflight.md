@@ -3,6 +3,9 @@
 ## Ticket 硬检查
 
 - [ ] Ticket frontmatter 可解析，`ready: true`，`status: ready`。
+- [ ] Tickets Map 已完整读取，包含总体实施背景和项目 Skill 读取矩阵；当前 Ticket 被 `ALL` 或自身 ID 覆盖。
+- [ ] 当前 Ticket 映射的项目 Skill 路径均为真实存在的项目根相对入口文件，Lead 已读取入口并完整展开命中的 Skill；implementation subagent Packet 包含 Map 与同一最低必读集合。
+- [ ] 项目 Agent 指令或当前实现范围没有触发矩阵外的未读项目 Skill；发现新匹配项时由 Lead 更新 Map、重新运行 tickets 校验后再恢复项目写入。
 - [ ] 所有 `blocked_by` Ticket 为 done 且 Evidence 存在。
 - [ ] Spec、ADR、Ticket 与 Goal Plan 无冲突；旧 Goal Plan schema 必须重跑 P-goal-plan。
 - [ ] Goal Plan（若存在）为 `lead-directed`，workspace/integration 策略为 `current/direct-parent` 或 `required/candidate-merge`，Lead 可恢复，implementation/integration 上限不超过 config 与平台能力。
@@ -14,6 +17,7 @@
 - [ ] current 模式 source 检查在 current workspace 且不宣称 E2E；required 模式 source 检查明确为非 E2E，required E2E 有 parent-candidate 场景与预期。
 - [ ] 验证命令/环境可用，关键静默失败风险有受控反向验证。
 - [ ] Deep Ticket 批准点已满足。
+- [ ] 若属于父 Implementation Map：父 revision 与 Plan source revision 一致，组合 Ticket 在 tasks/frontier 中，dependency Gate 已满足，serialization lock 可用，派单未重复，workspace 策略一致，全部成员 active implementation 数未超过父上限。
 
 ## Direct Spec 硬检查
 
@@ -29,6 +33,7 @@
 - **stale-navigation**：导航过时但契约仍有效；更新导航继续。
 - **local-implementation**：局部实现调整不改变契约；记录后继续。
 - **ticket-invalid**：范围、接口、依赖、验证或路径合同失效；停止并修 Ticket。
+- **map-context-stale**：总体实施背景、项目 Skill 矩阵、Ticket 覆盖或 Skill 路径失效；停止项目写入并返回 T-tickets 更新 Map。
 - **spec-invalid / adr-conflict**：返回对应上游 owner。
 - **checkpoint-drift**：current/来源/父分支/派单 checkpoint 漂移；由 Lead 重建执行记录或 required 模式的 worktree/candidate。
 - **workspace-contract-invalid**：缺少父分支、owner、locator、implementation/source/适用 result 字段或授权；停止并修状态/计划。
@@ -36,3 +41,4 @@
 - **delivery-unverified**：候选、provider 声明或附件不能独立核对；保持 unverified。
 - **e2e-owner-invalid**：required 模式 E2E 被安排在 source worktree，或任一模式不是 Lead owner；停止并修 Ticket/Goal Plan。
 - **direct-parent-invalid**：current 模式的 Ticket commit、父 HEAD、验证或 Evidence 不一致；保留最后可信 commit 并阻塞当前 Ticket。
+- **parent-plan-stale**：父 Implementation Map revision、成员 Ticket、serialization、workspace 策略、全局实现配额或 repository/ref 已变化；停止当前派单并返回 P-goal-plan 重算。

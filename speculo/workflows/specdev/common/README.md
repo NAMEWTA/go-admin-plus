@@ -11,6 +11,7 @@
 
 ## 规则权威
 
+- 激活与记忆读取、事务门：`<Path>{roots.workflows}/specdev/common/rules/activation-and-memory.md</Path>`；它定义 locate-before-read 和写入前 owner/gateway 检查，其他规则只声明领域专属约束。
 - 工件职责与冲突裁决：`<Path>{roots.workflows}/specdev/common/rules/artifact-contract.md</Path>`
 - 规划原则：`<Path>{roots.workflows}/specdev/common/rules/planning-principles.md</Path>`
 - 规划深度与就绪：`<Path>{roots.workflows}/specdev/common/rules/readiness-and-depth.md</Path>`
@@ -21,6 +22,7 @@
 - Change 完成：`<Path>{roots.workflows}/specdev/common/rules/change-completion.md</Path>`
 - 代码注释：`<Path>{roots.workflows}/specdev/common/rules/code-commenting-rule.md</Path>`
 - 代码库设计：`<Path>{roots.workflows}/specdev/common/rules/codebase-design.md</Path>`
+- 父实现编排：`<Path>{roots.workflows}/specdev/common/rules/parent-implementation-orchestration.md</Path>`
 
 ## 结构化工件 Schema
 
@@ -31,21 +33,25 @@
 - Ticket：`<Path>{roots.workflows}/specdev/common/schemas/ticket.schema.json</Path>`
 - Tickets Map：`<Path>{roots.workflows}/specdev/common/schemas/tickets-map.schema.json</Path>`
 - Goal Plan：`<Path>{roots.workflows}/specdev/common/schemas/goal-plan.schema.json</Path>`
+- Implementation Map：`<Path>{roots.workflows}/specdev/common/schemas/implementation-map.schema.json</Path>`
+- Implementation Plan：`<Path>{roots.workflows}/specdev/common/schemas/implementation-plan.schema.json</Path>`
 - 设计树：`<Path>{roots.workflows}/specdev/common/schemas/design-tree.schema.json</Path>`
 - Wayfinder Ticket：`<Path>{roots.workflows}/specdev/common/schemas/wayfinder-ticket.schema.json</Path>`
 - 来源快照：`<Path>{roots.workflows}/specdev/common/schemas/source.schema.json</Path>`
 - 分诊：`<Path>{roots.workflows}/specdev/common/schemas/triage.schema.json</Path>`
+- 发布账本：`<Path>{roots.workflows}/specdev/common/schemas/publish.schema.json</Path>`
+- 捕获账本：`<Path>{roots.workflows}/specdev/common/schemas/capture.schema.json</Path>`
 - 诊断：`<Path>{roots.workflows}/specdev/common/schemas/diagnosis.schema.json</Path>`
 - 代码审查：`<Path>{roots.workflows}/specdev/common/schemas/code-review.schema.json</Path>`
-- 原型记录：`<Path>{roots.workflows}/specdev/common/schemas/prototype-record.schema.json</Path>`
+- UI 设计包：`<Path>{roots.workflows}/specdev/P-prototype/design-package.schema.json</Path>`
 
 ## 工具与 Skill
 
 - 包与 change 校验器：`<Path>{roots.workflows}/specdev/common/tools/validate-specdev.mjs</Path>`
 - 校验器说明：`<Path>{roots.workflows}/specdev/common/tools/README.md</Path>`
 - 外部技术研究 Skill：`<Path>{roots.workflows}/specdev/common/skills/research/SKILL.md</Path>`
-- Ticket/原型 worktree Skill：`<Path>{roots.workflows}/specdev/common/skills/dev-worktree/SKILL.md</Path>`；仅 required Ticket 使用 source → parent-candidate → parent 状态机，current Ticket 使用 current workspace/direct-parent，原型保持临时生命周期
-- 动态 Agent 交付合同 Skill：`<Path>{roots.workflows}/specdev/common/skills/subagent-delivery/SKILL.md</Path>`；P-goal-plan 建立 Lead 合同，I-implement 在执行期派单与验收
+- Ticket worktree Skill：`<Path>{roots.workflows}/specdev/common/skills/dev-worktree/SKILL.md</Path>`；仅 required Ticket 使用 source → parent-candidate → parent 状态机，current Ticket 使用 current workspace/direct-parent
+- 动态 Agent 交付合同 Skill：`<Path>{roots.workflows}/specdev/common/skills/subagent-delivery/SKILL.md</Path>`；P-goal-plan 可建立子 change Lead 合同，I-implement 在执行期派单与验收，Goal 编排的全局门约束
 - 双轴代码审查 Skill：`<Path>{roots.workflows}/specdev/common/skills/code-review/SKILL.md</Path>`
 
 ## 加载原则

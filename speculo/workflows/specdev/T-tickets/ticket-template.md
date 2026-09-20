@@ -1,10 +1,15 @@
 ---
 schema_version: 3
+plan_contract_version: 1
+skill_scan: unreviewed
+skill_bindings: []
+resource_claims: []
 artifact: ticket
 change: <YYYY-MM-DD-topic>
 id: T-01
 title: <标题>
 status: draft
+kind: bug
 planning_depth: standard
 planning_depth_reason: <触发该深度的事实>
 ready: false
@@ -25,6 +30,8 @@ shared_path_owners: []
 - **总体 Map：** `<Path>{roots.state}/specdev/changes/{change}/tickets-map.md</Path>`
 - **上游 Spec：** `<Path>{roots.state}/specdev/changes/{change}/spec.md</Path>`
 - **完成 Evidence：** `<Path>{roots.state}/specdev/changes/{change}/evidence/T-01.md</Path>`
+
+实现本 Ticket 时，Lead 与 implementation subagent 必须按顺序完整读取总体 Map，读取项目 Skill 的 frontmatter 与入口并只展开适用于 `ALL`/`T-01` 的匹配项，再读取本 Ticket 与相关上游工件。Map 中的 Skill 是最低必读集合；新的匹配项先由 Lead 同步到 Map 并重新校验。
 
 ## 1. 战略与来源
 
@@ -123,9 +130,22 @@ E2E 由实际跨边界行为与风险决定，不限于 UI；required 模式不�
 ## 10. 验收标准
 
 - [ ] `AC-001`：<可判定结果>。
+- [ ] 实现开始前已完整读取 Tickets Map，已读取项目 Skill 入口并完整展开其中适用于 `ALL`/`T-01` 的匹配项；新发现的匹配 Skill 已由 Lead 同步回 Map。
 - [ ] 验证矩阵全部执行并记录到 `<Path>{roots.state}/specdev/changes/{change}/evidence/T-01.md</Path>`。
 - [ ] 实际项目修改未超出 `writable_paths`，shared path 由指定 owner 修改。
 - [ ] Ticket 已按 Goal Plan 策略形成非空 implementation/source commit，direct-parent 或 candidate 验证通过且父分支 result 已记录。
 - [ ] E2E disposition 已执行；required 模式 E2E 在 parent-candidate、current 模式在 current workspace 由 Lead 完成。
 - [ ] 未发生未批准的范围、契约或发布偏差。
 - [ ] Ticket、Tickets Map 和 Evidence 状态一致。
+
+## 11. SKILL 调用计划
+
+依据 `<Path>{roots.workflows}/specdev/common/rules/skill-invocation.md</Path>` 填写 frontmatter 绑定；正文解释每项调用为什么属于本票、具体何时调用、输入定位、输出如何用于下一步。不是仅给出技能名称或阅读列表。没有适用项目 Skill 时写明真实扫描证据；不要保留 unreviewed。
+
+## 12. 停止、检查点与交付
+
+- **用户交付要求与数量：** 与 Map 的 requested_deliverables 对齐；不为压缩而减少。
+- **必需 Skill/引用/测试不可用：** 阻塞本票，报告缺口，不静默替换默认工具。
+- **归属与资源冲突：** 暂停本票和受影响下游，不接管他人状态；独立票由 map 继续。
+- **检查点：** 记录源版本、绑定摘要、已完成步骤、Evidence 和未闭合动作；恢复前回读。
+- **完成出口：** 全部适用验收及实际 Skill 证据通过，再将结果交回 Goal；未完成项明确列出。

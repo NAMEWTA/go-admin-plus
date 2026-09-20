@@ -11,17 +11,25 @@
 
 import {
   existsSync,
+  lstatSync,
   readFileSync,
   readdirSync,
   statSync,
 } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { dirname, basename, extname, join, relative, resolve, sep } from "node:path";
+import { dirname, basename, extname, join, relative, resolve, sep, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import {
+  validateTicketPlan, validatePlanMap, validateInvocationCoverage,
+  validateGoalMap, validateInitiative, resolveProjectSource,
+} from "./plan-contract.mjs";
 
 const DOMAIN_SCHEMA_VERSION = 3;
 const CONFIG_SCHEMA_VERSION = 5;
 const GOAL_PLAN_SCHEMA_VERSION = 6;
+const IMPLEMENTATION_MAP_SCHEMA_VERSION = 1;
+const IMPLEMENTATION_PLAN_SCHEMA_VERSION = 1;
 const CHANGE_STATUS_SCHEMA_VERSION = 6;
 const GLOBAL_STATUS_SCHEMA_VERSION = 5;
 const WORKFLOW_PREFIX = "{roots.workflows}/specdev/";
@@ -29,16 +37,16 @@ const STATE_PREFIX = "{roots.state}/specdev/";
 const STATE_ROOT_PREFIX = "{roots.state}/";
 const SKILLS_PREFIX = "{roots.skills}/";
 const COMMANDS_PREFIX = "{roots.commands}/";
+const CHANGE_NAME = /^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const EXPECTED_WORKS = new Set([
   "A-archive-and-consolidate",
   "C-code-review",
   "D-diagnose-bugs",
-  "E-eli5",
-  "E-engineering-cognitive-mentor",
   "G-grill-with-docs",
   "I-implement",
   "I-init-setup",
+  "L-learn-change",
   "P-goal-plan",
   "P-prototype",
   "R-review-architecture",
@@ -58,6 +66,57 @@ const VALID_TICKET_STATUS = new Set([
   "deviated",
   "cancelled",
 ]);
+const VALID_TICKET_KIND = new Set([
+  "bug",
+  "feature",
+  "refactor",
+  "investigation",
+  "operations",
+  "documentation",
+  "review",
+]);
+const VALID_TRIAGE_MODE = new Set(["intake", "reconcile", "publish"]);
+const VALID_PUBLISH_ACTION = new Set([
+  "not-requested",
+  "pending",
+  "published",
+  "publish-failed",
+  "waived",
+]);
+const VALID_PUBLISH_ROW_STATE = new Set([
+  "planned",
+  "created",
+  "commented",
+  "closed",
+  "skipped:cancelled",
+  "skipped:excluded",
+  "failed",
+]);
+const FORBIDDEN_PUBLISH_LABELS = new Set([
+  "needs-triage",
+  "needs-info",
+  "ready-for-agent",
+  "ready-for-human",
+  "wontfix",
+  "duplicate",
+  "invalid",
+  "stale",
+]);
+const COUNTED_PUBLISH_STATES = new Set(["closed", "created", "commented"]);
+const VALID_CAPTURE_ROW_STATE = new Set([
+  "planned",
+  "open",
+  "skipped:duplicate",
+  "intaken",
+  "waived",
+  "failed",
+]);
+const FORBIDDEN_CAPTURE_LABELS = new Set([
+  ...FORBIDDEN_PUBLISH_LABELS,
+  "specdev:published",
+  "specdev:change",
+]);
+const COUNTED_CAPTURE_REMOTE_STATES = new Set(["open", "intaken"]);
 const VALID_DEPTH = new Set(["lite", "standard", "deep"]);
 const VALID_RISK = new Set(["low", "medium", "high", "critical"]);
 const VALID_PLAN_MODES = new Set([
@@ -99,11 +158,11 @@ const VALID_STAGES = new Set([
   "triage",
   "diagnosis",
   "grill",
-  "eli5",
   "spec",
   "tickets",
   "goal-plan",
   "implement",
+  "learn-change",
   "review",
   "prototype",
   "wayfinder",
@@ -159,19 +218,24 @@ const STATE_ARTIFACT_BASENAMES = new Set([
   "spec.md",
   "tickets-map.md",
   "goal-plan.md",
+  "implementation-map.md",
+  "implementation-plan.md",
   "ADR.md",
   "CONTEXT.md",
   "LOG.md",
   "status.json",
   ".status.json",
   "triage.md",
+  "publish.md",
+  "capture.md",
   "diagnosis.md",
   "source.md",
   "architecture-review.md",
-  "architecture-review.html",
-  "eli_index.md",
   "wayfinder-map.md",
   "design-tree.json",
+  "implementation-orchestration.md",
+  "initiative.json",
+  "goal-delivery.md",
 ]);
 const FORBIDDEN_OBSOLETE_BASENAMES = new Set([
   "source-issue.md",
@@ -233,7 +297,11 @@ function parseScalar(raw) {
     return value.slice(1, -1);
   }
   if (value.startsWith("[") && value.endsWith("]")) {
+    // JSON object arrays are used by the additive Skill invocation contract.
+    // Keep the existing plain YAML scalar-list form for old artifacts.
+    try { return JSON.parse(value); } catch { /* legacy scalar list below */ }
     const inner = value.slice(1, -1).trim();
+    if (inner.startsWith("{")) throw new Error("invalid JSON object array in frontmatter");
     if (!inner) return [];
     return inner.split(",").map((item) => parseScalar(item));
   }
@@ -247,7 +315,7 @@ function parseScalar(raw) {
   return value;
 }
 
-function findSpecdevConfig(change) {
+function findSpecdevConfigByAncestry(change) {
   let current = resolve(change);
   while (true) {
     const candidate = join(current, ".speculo", "specdev", "config.json");
@@ -262,6 +330,149 @@ function findSpecdevConfig(change) {
     if (parent === current) return null;
     current = parent;
   }
+}
+
+function uniqueResolved(paths) {
+  const seen = new Set();
+  const result = [];
+  for (const path of paths) {
+    const resolved = resolve(path);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    result.push(resolved);
+  }
+  return result;
+}
+
+function ancestorsOf(start) {
+  const dirs = [];
+  let current = resolve(start);
+  while (true) {
+    dirs.push(current);
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return dirs;
+}
+
+function parseWorkspaceCandidate(filePath, projectRoot) {
+  if (!isFile(filePath)) return null;
+  let data;
+  try {
+    data = JSON.parse(readText(filePath));
+  } catch {
+    return null;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+  if (data.schema_version !== 1 || data.path_base !== "project-root") return null;
+  const state = data.roots?.state;
+  if (typeof state !== "string" || !state.trim()) return null;
+  const declared = toPosix(state).replace(/^\.?\//, "").replace(/\/$/, "");
+  if (
+    !declared ||
+    declared.split("/").includes("..") ||
+    isAbsolute(declared) ||
+    ABSOLUTE_MACHINE_PATH_RE.test(declared)
+  ) {
+    return null;
+  }
+  const expected = resolve(projectRoot, declared, "workspace.json");
+  if (expected !== resolve(filePath)) return null;
+  return {
+    filePath: resolve(filePath),
+    projectRoot: resolve(projectRoot),
+    stateDeclared: declared,
+    stateRoot: resolve(projectRoot, declared),
+    data,
+  };
+}
+
+function workspaceProbes(projectRoot) {
+  const root = resolve(projectRoot);
+  return [
+    { projectRoot: root, filePath: join(root, "speculo", ".speculo", "workspace.json") },
+    { projectRoot: root, filePath: join(root, ".speculo", "workspace.json") },
+  ];
+}
+
+function collectWorkspaceCandidates(repoRoot, change) {
+  const probes = [];
+  if (repoRoot) {
+    probes.push(...workspaceProbes(repoRoot));
+  } else {
+    for (const dir of uniqueResolved([...ancestorsOf(change), ...ancestorsOf(process.cwd())])) {
+      probes.push(...workspaceProbes(dir));
+    }
+  }
+  const found = new Map();
+  for (const probe of probes) {
+    const parsed = parseWorkspaceCandidate(probe.filePath, probe.projectRoot);
+    if (!parsed) continue;
+    if (!found.has(parsed.filePath)) found.set(parsed.filePath, parsed);
+  }
+  return [...found.values()];
+}
+
+function isLegalChangeLocation(changeAbs, stateRoot) {
+  const name = basename(changeAbs);
+  if (resolve(stateRoot, "specdev", "changes", name) === changeAbs) return true;
+  const monthDir = dirname(changeAbs);
+  const archiveRoot = dirname(monthDir);
+  return (
+    /^\d{4}-\d{2}$/.test(basename(monthDir)) &&
+    resolve(stateRoot, "specdev", "archive") === archiveRoot &&
+    basename(changeAbs) === name
+  );
+}
+
+function resolveWorkspaceContract(repoRoot, change) {
+  const changeAbs = resolve(change);
+  const candidates = collectWorkspaceCandidates(repoRoot, changeAbs);
+  if (!candidates.length) {
+    return { mode: "legacy", errors: [], config: null, specdevRoot: null, stateDeclared: null };
+  }
+  const uniqueRoots = uniqueResolved(candidates.map((candidate) => candidate.stateRoot));
+  if (uniqueRoots.length > 1) {
+    const declared = [...new Set(candidates.map((candidate) => candidate.stateDeclared))].sort();
+    return {
+      mode: "strict",
+      errors: [`conflicting workspace.json roots.state (${declared.join(" vs ")})`],
+      config: null,
+      specdevRoot: null,
+      stateDeclared: null,
+    };
+  }
+  const workspace = candidates[0];
+  const specdevRoot = join(workspace.stateRoot, "specdev");
+  const errors = [];
+  if (!isLegalChangeLocation(changeAbs, workspace.stateRoot)) {
+    errors.push(
+      `change is outside workspace roots.state (${workspace.stateDeclared}/specdev); project-root .speculo/specdev is illegal`,
+    );
+  }
+  let config = null;
+  const configPath = join(specdevRoot, "config.json");
+  if (isFile(configPath)) {
+    try {
+      config = JSON.parse(readText(configPath));
+    } catch {
+      config = null;
+    }
+  }
+  return {
+    mode: "strict",
+    errors,
+    config,
+    specdevRoot,
+    stateDeclared: workspace.stateDeclared,
+  };
+}
+
+function findSpecdevConfig(change, repoRoot = null) {
+  const contract = resolveWorkspaceContract(repoRoot, change);
+  if (contract.mode === "strict") return contract.config;
+  return findSpecdevConfigByAncestry(change);
 }
 
 function positiveConfigLimit(config, key, fallback) {
@@ -289,6 +500,9 @@ function parseFrontmatter(path) {
     const colon = line.indexOf(":");
     if (colon < 0) continue;
     const key = line.slice(0, colon).trim();
+    if (["__proto__", "constructor", "prototype"].includes(key) || Object.hasOwn(meta, key)) {
+      throw new Error(`${path}: duplicate or unsafe frontmatter key ${key}`);
+    }
     const raw = line.slice(colon + 1).trim();
     if (!raw) {
       meta[key] = [];
@@ -315,6 +529,12 @@ function sectionBody(body, heading) {
 function stripPathTag(value) {
   const match = /^<Path>([^<]+)<\/Path>$/.exec(String(value).trim());
   return match ? match[1].trim() : null;
+}
+
+function stripInlineCode(value) {
+  const trimmed = String(value).trim();
+  const match = /^`([^`]+)`$/.exec(trimmed);
+  return match ? match[1].trim() : trimmed;
 }
 
 function normalizeProjectPath(value) {
@@ -469,10 +689,21 @@ function validateDocumentReferences(root) {
   const errors = [];
   const warnings = [];
   const entries = walk(root);
-  const knownFiles = new Set(entries.filter(isFile).map((path) => basename(path)));
-  const knownDirectories = new Set(entries.filter(isDirectory).map((path) => basename(path)));
+  const frozenResearchRoot = join(
+    root,
+    "P-prototype",
+    "design-library",
+    "research-snapshot",
+  );
+  const governedEntries = entries.filter(
+    (path) => path !== frozenResearchRoot && !path.startsWith(`${frozenResearchRoot}${sep}`),
+  );
+  const knownFiles = new Set(governedEntries.filter(isFile).map((path) => basename(path)));
+  const knownDirectories = new Set(governedEntries.filter(isDirectory).map((path) => basename(path)));
 
-  for (const path of entries.filter(
+  // The pinned research snapshot preserves its upstream relative links and HTML
+  // asset paths byte-for-byte. Global template link checks still validate it.
+  for (const path of governedEntries.filter(
     (item) => isFile(item) && [".md", ".html"].includes(extname(item).toLowerCase()),
   )) {
     const label = toPosix(relative(root, path));
@@ -667,6 +898,8 @@ function validateExecutionContractAssets(root) {
   const configSchemaPath = join(root, "common", "schemas", "config.schema.json");
   const goalPlanSchemaPath = join(root, "common", "schemas", "goal-plan.schema.json");
   const changeSchemaPath = join(root, "common", "schemas", "change-status.schema.json");
+  const implementationMapSchemaPath = join(root, "common", "schemas", "implementation-map.schema.json");
+  const implementationPlanSchemaPath = join(root, "common", "schemas", "implementation-plan.schema.json");
 
   for (const path of [
     configTemplatePath,
@@ -674,6 +907,8 @@ function validateExecutionContractAssets(root) {
     configSchemaPath,
     goalPlanSchemaPath,
     changeSchemaPath,
+    implementationMapSchemaPath,
+    implementationPlanSchemaPath,
   ]) {
     if (!isFile(path)) errors.push(`missing execution contract asset ${toPosix(relative(root, path))}`);
   }
@@ -686,12 +921,13 @@ function validateExecutionContractAssets(root) {
     configTemplate.execution.max_implementation_agents < 1 ||
     !Number.isInteger(configTemplate.execution?.max_integration_attempts) ||
     configTemplate.execution.max_integration_attempts < 1 ||
-    !Number.isInteger(configTemplate.planning?.ui_prototype_default_variants) ||
-    !Number.isInteger(configTemplate.planning?.ui_prototype_max_variants) ||
-    configTemplate.planning.ui_prototype_default_variants < 1 ||
-    configTemplate.planning.ui_prototype_max_variants < configTemplate.planning.ui_prototype_default_variants
+    !Number.isInteger(configTemplate.planning?.ui_design_default_candidates) ||
+    !Number.isInteger(configTemplate.planning?.ui_design_max_candidates) ||
+    configTemplate.planning.ui_design_default_candidates < 2 ||
+    configTemplate.planning.ui_design_max_candidates > 4 ||
+    configTemplate.planning.ui_design_max_candidates < configTemplate.planning.ui_design_default_candidates
   ) {
-    errors.push("config-template.json must define SpecDev config v5 with positive execution limits and valid prototype variant bounds");
+    errors.push("config-template.json must define SpecDev config v5 with positive execution limits and valid UI design candidate bounds");
   }
   for (const obsolete of ["auto_commit", "worktree_for_parallel", "max_parallel"]) {
     if (JSON.stringify(configTemplate).includes(`\"${obsolete}\"`)) {
@@ -745,6 +981,29 @@ function validateExecutionContractAssets(root) {
   ) {
     errors.push("change-status.schema.json must define the strict Ticket integration v6 contract");
   }
+
+  const implementationMapSchema = JSON.parse(readText(implementationMapSchemaPath));
+  if (
+    implementationMapSchema.$id !== "urn:speculo:specdev:implementation-map:v1" ||
+    implementationMapSchema.properties?.schema_version?.const !== IMPLEMENTATION_MAP_SCHEMA_VERSION ||
+    implementationMapSchema.properties?.members?.minItems !== 2 ||
+    implementationMapSchema.properties?.tasks?.minItems !== 1 ||
+    implementationMapSchema.additionalProperties !== false
+  ) {
+    errors.push("implementation-map.schema.json must define the strict parent implementation graph contract v1");
+  }
+  const implementationPlanSchema = JSON.parse(readText(implementationPlanSchemaPath));
+  if (
+    implementationPlanSchema.$id !== "urn:speculo:specdev:implementation-plan:v1" ||
+    implementationPlanSchema.properties?.schema_version?.const !== IMPLEMENTATION_PLAN_SCHEMA_VERSION ||
+    implementationPlanSchema.properties?.orchestration?.const !== "lead-directed" ||
+    implementationPlanSchema.properties?.implementation_agent_limit?.minimum !== 1 ||
+    implementationPlanSchema.properties?.integration_attempt_limit?.minimum !== 1 ||
+    !["current", "required"].every((value) => implementationPlanSchema.properties?.ticket_workspace_policy?.enum?.includes(value)) ||
+    implementationPlanSchema.additionalProperties !== false
+  ) {
+    errors.push("implementation-plan.schema.json must define the strict parent implementation projection contract v1");
+  }
   return errors;
 }
 
@@ -767,7 +1026,7 @@ function capabilityChecks(root) {
       "triage",
       [
         join(root, "T-triage", "T-triage.md"),
-        ["source.md", "intake", "reconcile", "唯一权威", "远程写入为零"],
+        ["source.md", "intake", "reconcile", "publish", "publish.md", "specdev:published", "capture", "capture.md", "specdev:captured", "唯一权威", "远程写入为零"],
       ],
     ],
     [
@@ -820,14 +1079,14 @@ function capabilityChecks(root) {
       "prototype",
       [
         join(root, "P-prototype", "P-prototype.md"),
-        ["一个问题", "Logic", "UI", "临时 branch/worktree", "promotion target", "main"],
+        ["设计定向", "风格", "design-system.md", "comparison", "HTML/CSS/JS", "design-library/INDEX.md"],
       ],
     ],
     [
-      "eli5",
+      "learn-change",
       [
-        join(root, "E-eli5", "E-eli5.md"),
-        ["大一新生", "零专业背景", "$ARGUMENTS", "ASCII", "eli_index.md", "{number}_{topic}.md"],
+        join(root, "L-learn-change", "L-learn-change.md"),
+        ["开发完成后", "零专业背景", "$ARGUMENTS", "ASCII", "learning/index.md", "{number}_{topic}.md", "{roots.state}/learning/"],
       ],
     ],
     [
@@ -841,14 +1100,21 @@ function capabilityChecks(root) {
       "architecture-review",
       [
         join(root, "R-review-architecture", "R-review-architecture.md"),
-        ["shallow", "interface", "locality", "Tailwind CDN", "Mermaid CDN", "最佳推荐"],
+        ["结构性坏味道", "code-judo", "删除测试", "高置信候选", "最佳推荐"],
+      ],
+    ],
+    [
+      "architecture-review-rubric",
+      [
+        join(root, "R-review-architecture", "review-rubric.md"),
+        ["删除测试", "文件大小", "高置信候选", "spaghetti growth"],
       ],
     ],
     [
       "archive",
       [
         join(root, "A-archive-and-consolidate", "A-archive-and-consolidate.md"),
-        ["archive-single", "dry-run", "external_action", "consolidate-from-code", "archive-and-consolidate"],
+        ["archive-single", "dry-run", "external_action", "publish_action", "consolidate-from-code", "archive-and-consolidate"],
       ],
     ],
     [
@@ -879,15 +1145,6 @@ function capabilityChecks(root) {
       errors.push(`capability '${ability}' lost markers: ${JSON.stringify(missing)}`);
     }
   }
-  if (!isFile(join(root, "R-review-architecture", "architecture-review-report-template.html"))) {
-    errors.push("architecture review lost its visual HTML report template");
-  } else {
-    const html = readText(join(root, "R-review-architecture", "architecture-review-report-template.html"));
-    for (const marker of ["cdn.tailwindcss.com", "mermaid", "Before", "After", "top-recommendation"]) {
-      if (!html.includes(marker)) errors.push(`architecture HTML template lost marker ${marker}`);
-    }
-  }
-
   for (const required of [
     "common/rules/codebase-design.md",
     "common/schemas/design-tree.schema.json",
@@ -895,7 +1152,14 @@ function capabilityChecks(root) {
     "G-grill-with-docs/design-tree-template.json",
     "W-wayfinder/local-tracker-contract.md",
     "W-wayfinder/solution-comment-template.md",
-    "R-review-architecture/architecture-report-contract.md",
+    "common/rules/parent-implementation-orchestration.md",
+    "common/schemas/implementation-map.schema.json",
+    "common/schemas/implementation-plan.schema.json",
+    "common/schemas/capture.schema.json",
+    "T-triage/capture-protocol.md",
+    "T-triage/capture-template.md",
+    "T-triage/issue-record-template.md",
+    "T-triage/tools/capture-status.mjs",
   ]) {
     if (!isFile(join(root, required))) errors.push(`missing architecture/wayfinding contract ${required}`);
   }
@@ -1121,7 +1385,7 @@ function validateTriage(path, expectedChange, errors) {
     errors.push("triage.md: artifact/schema_version must be triage/1");
   }
   if (meta.change !== expectedChange) errors.push("triage.md: change must equal directory name");
-  if (!new Set(["intake", "reconcile"]).has(meta.mode)) errors.push(`triage.md: invalid mode ${meta.mode}`);
+  if (!VALID_TRIAGE_MODE.has(meta.mode)) errors.push(`triage.md: invalid mode ${meta.mode}`);
   if (!VALID_RISK.has(meta.risk)) errors.push(`triage.md: invalid risk ${meta.risk}`);
   if (typeof meta.route !== "string" || !meta.route.startsWith("specdev/")) {
     errors.push("triage.md: route must be a specdev work id");
@@ -1132,13 +1396,221 @@ function validateTriage(path, expectedChange, errors) {
   if (!new Set(["not-applicable", "pending-close", "closed", "close-failed", "waived"]).has(meta.external_action)) {
     errors.push(`triage.md: invalid external_action ${meta.external_action}`);
   }
+  const publishAction = meta.publish_action == null || meta.publish_action === ""
+    ? "not-requested"
+    : meta.publish_action;
+  if (!VALID_PUBLISH_ACTION.has(publishAction)) {
+    errors.push(`triage.md: invalid publish_action ${meta.publish_action}`);
+  }
+  meta.publish_action = publishAction;
   if (!String(meta.source ?? "").includes("/source.md</Path>")) {
     errors.push("triage.md: source must reference the local source.md artifact");
   }
   for (const heading of ["## 当前判定", "## 未知项", "## 路由", "## 外部动作"]) {
     if (!body.includes(heading)) errors.push(`triage.md: missing '${heading}'`);
   }
+  if (publishAction !== "not-requested" && !body.includes("## 发布投影")) {
+    errors.push("triage.md: missing '## 发布投影'");
+  }
   return { path, meta, body };
+}
+
+function parsePublishLedger(body) {
+  const rows = [];
+  for (const line of body.split(/\r?\n/)) {
+    if (!/^\|/.test(line) || /^\|\s*-+/.test(line) || /^\|\s*ticket\s*\|/i.test(line)) continue;
+    const cells = line.split("|").map((cell) => cell.trim());
+    const inner = cells.slice(1, cells.length - 1);
+    if (inner.length < 8) continue;
+    rows.push({
+      ticket: inner[0],
+      kind: inner[1],
+      labels: inner[2],
+      number: inner[3],
+      url: inner[4],
+      marker: inner[5],
+      sha256: inner[6],
+      state: inner[7],
+    });
+  }
+  return rows;
+}
+
+function validatePublish(path, expectedChange, triage, errors) {
+  if (!isFile(path)) {
+    errors.push("missing publish.md ledger");
+    return null;
+  }
+  const { meta, body } = parseFrontmatter(path);
+  const required = [
+    "schema_version",
+    "artifact",
+    "change",
+    "mode",
+    "repo",
+    "publish_action",
+    "include_cancelled",
+    "origin",
+    "updated_at",
+  ];
+  const missing = required.filter((key) => !(key in meta));
+  if (missing.length) errors.push(`publish.md: missing keys ${JSON.stringify(missing)}`);
+  if (meta.schema_version !== 1 || meta.artifact !== "publish") {
+    errors.push("publish.md: artifact/schema_version must be publish/1");
+  }
+  if (meta.change !== expectedChange) errors.push("publish.md: change must equal directory name");
+  if (meta.mode !== "publish") errors.push(`publish.md: invalid mode ${meta.mode}`);
+  if (!new Set(["pending", "published", "publish-failed", "waived"]).has(meta.publish_action)) {
+    errors.push(`publish.md: invalid publish_action ${meta.publish_action}`);
+  }
+  if (!new Set(["local", "intake"]).has(meta.origin)) {
+    errors.push(`publish.md: invalid origin ${meta.origin}`);
+  }
+  if (typeof meta.repo !== "string" || !/.+\/.+/.test(meta.repo)) {
+    errors.push("publish.md: repo must be owner/repo");
+  }
+  for (const heading of ["## 发布计划", "## 账本", "## 计数", "## 重试"]) {
+    if (!body.includes(heading)) errors.push(`publish.md: missing '${heading}'`);
+  }
+  const rows = parsePublishLedger(body);
+  if (!rows.length) errors.push("publish.md: ledger table has no ticket rows");
+  const mixed = triage && triage.meta.classification === "mixed";
+  for (const row of rows) {
+    if (!/^T-\d{2,}$/.test(row.ticket)) {
+      errors.push(`publish.md: invalid ticket id ${row.ticket}`);
+    }
+    if (!VALID_PUBLISH_ROW_STATE.has(row.state)) {
+      errors.push(`publish.md: ${row.ticket}: invalid state ${row.state}`);
+    }
+    const labels = row.labels.split(",").map((item) => item.trim()).filter(Boolean);
+    for (const label of labels) {
+      if (FORBIDDEN_PUBLISH_LABELS.has(label)) {
+        errors.push(`publish.md: ${row.ticket}: forbidden label ${label}`);
+      }
+    }
+    const skipped = row.state.startsWith("skipped:");
+    if (!skipped && !VALID_TICKET_KIND.has(row.kind)) {
+      errors.push(`publish.md: ${row.ticket}: invalid kind ${row.kind}`);
+    }
+    if (mixed && !skipped && !VALID_TICKET_KIND.has(row.kind)) {
+      errors.push(`publish.md: mixed change requires kind on ${row.ticket}`);
+    }
+    if (COUNTED_PUBLISH_STATES.has(row.state) || row.state === "closed") {
+      if (!/^\d+$/.test(row.number)) {
+        errors.push(`publish.md: ${row.ticket}: ${row.state} row requires issue number`);
+      }
+      if (!String(row.url).startsWith("https://github.com/")) {
+        errors.push(`publish.md: ${row.ticket}: ${row.state} row requires GitHub url`);
+      }
+      const expectedMarker = `specdev:${expectedChange}:${row.ticket}:published`;
+      if (row.marker !== expectedMarker) {
+        errors.push(`publish.md: ${row.ticket}: marker must be ${expectedMarker}`);
+      }
+    }
+    if (row.state === "closed" || row.state === "created" || row.state === "commented") {
+      if (!labels.includes("specdev:published")) {
+        errors.push(`publish.md: ${row.ticket}: missing specdev:published`);
+      }
+      const originLabel = meta.origin === "intake" ? "origin:intake" : "origin:local";
+      if (!labels.includes(originLabel)) {
+        errors.push(`publish.md: ${row.ticket}: missing ${originLabel}`);
+      }
+    }
+  }
+  return { path, meta, body, rows };
+}
+
+function parseCaptureLedger(body) {
+  const rows = [];
+  for (const line of body.split(/\r?\n/)) {
+    if (!/^\|/.test(line) || /^\|\s*-+/.test(line) || /^\|\s*id\s*\|/i.test(line)) continue;
+    const cells = line.split("|").map((cell) => cell.trim());
+    const inner = cells.slice(1, cells.length - 1);
+    if (inner.length < 9) continue;
+    rows.push({
+      id: inner[0],
+      kind: inner[1],
+      title: inner[2],
+      labels: inner[3],
+      number: inner[4],
+      url: inner[5],
+      marker: inner[6],
+      sha256: inner[7],
+      state: inner[8],
+    });
+  }
+  return rows;
+}
+
+function validateCapture(path, errors) {
+  if (!isFile(path)) {
+    errors.push("missing capture.md ledger");
+    return null;
+  }
+  const { meta, body } = parseFrontmatter(path);
+  const required = [
+    "schema_version",
+    "artifact",
+    "mode",
+    "repo",
+    "updated_at",
+  ];
+  const missing = required.filter((key) => !(key in meta));
+  if (missing.length) errors.push(`capture.md: missing keys ${JSON.stringify(missing)}`);
+  if (meta.schema_version !== 1 || meta.artifact !== "capture-index") {
+    errors.push("capture.md: artifact/schema_version must be capture-index/1");
+  }
+  if (meta.mode !== "capture") errors.push(`capture.md: invalid mode ${meta.mode}`);
+  if (typeof meta.repo !== "string" || !/.+\/.+/.test(meta.repo)) {
+    errors.push("capture.md: repo must be owner/repo");
+  }
+  for (const heading of ["## 捕获计划", "## 账本", "## 计数", "## 重试"]) {
+    if (!body.includes(heading)) errors.push(`capture.md: missing '${heading}'`);
+  }
+  const rows = parseCaptureLedger(body);
+  for (const row of rows) {
+    if (!CHANGE_NAME.test(row.id)) {
+      errors.push(`capture.md: invalid id ${row.id}`);
+    }
+    if (!VALID_CAPTURE_ROW_STATE.has(row.state)) {
+      errors.push(`capture.md: ${row.id}: invalid state ${row.state}`);
+    }
+    const labels = row.labels.split(",").map((item) => item.trim()).filter(Boolean);
+    for (const label of labels) {
+      if (FORBIDDEN_CAPTURE_LABELS.has(label)) {
+        errors.push(`capture.md: ${row.id}: forbidden label ${label}`);
+      }
+    }
+    const skipped = row.state.startsWith("skipped:") || row.state === "waived" || row.state === "planned" || row.state === "failed";
+    if (!skipped && !VALID_TICKET_KIND.has(row.kind)) {
+      errors.push(`capture.md: ${row.id}: invalid kind ${row.kind}`);
+    }
+    if (COUNTED_CAPTURE_REMOTE_STATES.has(row.state)) {
+      if (!VALID_TICKET_KIND.has(row.kind)) {
+        errors.push(`capture.md: ${row.id}: invalid kind ${row.kind}`);
+      }
+      if (!/^\d+$/.test(row.number)) {
+        errors.push(`capture.md: ${row.id}: ${row.state} row requires issue number`);
+      }
+      if (!String(row.url).startsWith("https://github.com/")) {
+        errors.push(`capture.md: ${row.id}: ${row.state} row requires GitHub url`);
+      }
+      const expectedMarker = `specdev:capture:${row.id}`;
+      if (row.marker !== expectedMarker) {
+        errors.push(`capture.md: ${row.id}: marker must be ${expectedMarker}`);
+      }
+      if (!labels.includes("specdev:captured")) {
+        errors.push(`capture.md: ${row.id}: missing specdev:captured`);
+      }
+      if (!labels.includes("origin:local")) {
+        errors.push(`capture.md: ${row.id}: missing origin:local`);
+      }
+      if (labels.includes("origin:intake")) {
+        errors.push(`capture.md: ${row.id}: capture origin must be local`);
+      }
+    }
+  }
+  return { path, meta, body, rows };
 }
 
 function validateDiagnosis(path, expectedChange, errors) {
@@ -1207,85 +1679,170 @@ function validateReviews(change, required, errors) {
 
 function validatePrototypes(change, required, errors) {
   const root = join(change, "prototypes");
-  const paths = isDirectory(root)
-    ? walk(root).filter((path) => isFile(path) && basename(path) === "record.md").sort()
-    : [];
-  if (required && !paths.length) errors.push("prototype stage requires a prototypes/<id>/record.md artifact");
-  for (const path of paths) {
-    const { meta, body } = parseFrontmatter(path);
-    const label = toPosix(relative(change, path));
-    if (meta.schema_version !== 1 || meta.artifact !== "prototype-record") {
-      errors.push(`${label}: artifact/schema_version must be prototype-record/1`);
+  if (!isDirectory(root)) {
+    if (required) errors.push("prototype stage requires a prototypes/UI-NNN/design-system.md artifact");
+    return [];
+  }
+
+  const validator = resolve(
+    dirname(fileURLToPath(import.meta.url)),
+    "..",
+    "..",
+    "P-prototype",
+    "tools",
+    "validate-design-package.mjs",
+  );
+  const paths = [];
+  let readyCount = 0;
+
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const entryPath = join(root, entry.name);
+    const label = toPosix(relative(change, entryPath));
+    if (entry.isSymbolicLink()) {
+      errors.push(`${label}: prototype design directories and files must not be symlinks`);
+      continue;
     }
-    if (meta.change !== basename(change)) errors.push(`${label}: change must equal directory name`);
-    if (!/^PROTO-\d{3,}$/.test(String(meta.prototype_id ?? ""))) errors.push(`${label}: invalid prototype_id`);
-    if (!new Set(["logic", "ui"]).has(meta.branch)) errors.push(`${label}: invalid prototype branch`);
-    if (!new Set(["active", "answered", "blocked", "discarded"]).has(meta.status)) errors.push(`${label}: invalid prototype status`);
-    if (typeof meta.workspace_ref !== "string" || ABSOLUTE_MACHINE_PATH_RE.test(meta.workspace_ref)) {
-      errors.push(`${label}: workspace_ref must be a portable locator`);
+    if (!entry.isDirectory()) {
+      errors.push(`${label}: prototypes may only contain UI-NNN design directories`);
+      continue;
     }
-    if (meta.status === "answered" && (!String(meta.winner ?? "").trim() || !String(meta.promotion_target ?? "").trim())) {
-      errors.push(`${label}: answered prototype requires winner and promotion_target`);
+    if (!/^UI-\d{3,}$/.test(entry.name)) {
+      errors.push(`${label}: prototype design directory must use UI-NNN`);
+      continue;
     }
-    if (!new Set(["pending", "clean", "registered"]).has(meta.cleanup_status)) errors.push(`${label}: invalid cleanup_status`);
-    for (const heading of ["## Question and Assumption", "## Run and Assets", "## Evaluation", "## Promotion and Cleanup"]) {
-      if (!body.includes(heading)) errors.push(`${label}: missing '${heading}'`);
+
+    const designPath = join(entryPath, "design-system.md");
+    if (!isFile(designPath)) {
+      errors.push(`${label}: missing design-system.md`);
+      continue;
     }
+    paths.push(designPath);
+    const { meta } = parseFrontmatter(designPath);
+    if (meta.status === "ready") readyCount += 1;
+    try {
+      execFileSync(process.execPath, [validator, designPath], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      const details = String(error.stderr || error.stdout || error.message)
+        .trim()
+        .split(/\r?\n/)
+        .filter(Boolean);
+      if (!details.length) errors.push(`${label}: design package validation failed`);
+      for (const detail of details) errors.push(`${label}: ${detail}`);
+    }
+  }
+
+  const obsoleteRecords = walk(root).filter(
+    (path) => isFile(path) && basename(path) === "record.md",
+  );
+  for (const path of obsoleteRecords) {
+    errors.push(`${toPosix(relative(change, path))}: obsolete prototype record is forbidden; use UI-NNN/design-system.md`);
+  }
+  const discoveredDesigns = walk(root).filter(
+    (path) => isFile(path) && basename(path) === "design-system.md",
+  );
+  for (const path of discoveredDesigns) {
+    if (!paths.includes(path)) {
+      errors.push(`${toPosix(relative(change, path))}: design-system.md must be directly under prototypes/UI-NNN`);
+    }
+  }
+  if (required && readyCount === 0) {
+    errors.push("prototype stage requires at least one ready UI design package");
   }
   return paths;
 }
 
-function validateEli5(change, required, errors) {
-  const indexPath = join(change, "eli_index.md");
-  const diagramFiles = readdirSync(change, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && /^\d{2,}_[^/\\\\\s]+\.md$/.test(entry.name))
-    .map((entry) => entry.name)
-    .sort();
+function validateChangeLearning(change, required, errors) {
+  const learningRoot = join(change, "learning");
+  const indexPath = join(learningRoot, "index.md");
+  const diagramName = /^\d{2,}_[\p{L}\p{N}_-]+\.md$/u;
+
+  if (!existsSync(learningRoot)) {
+    if (required) errors.push("learn-change stage requires learning/index.md");
+    return null;
+  }
+  if (lstatSync(learningRoot).isSymbolicLink() || !isDirectory(learningRoot)) {
+    errors.push("learning/: change learning directory must be a real directory");
+    return null;
+  }
+
+  const diagramFiles = [];
+  for (const entry of readdirSync(learningRoot, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) {
+      errors.push(`learning/${entry.name}: learning artifacts must not be symlinks`);
+    } else if (entry.isFile() && diagramName.test(entry.name)) {
+      diagramFiles.push(entry.name);
+    }
+  }
+  diagramFiles.sort();
 
   if (!isFile(indexPath)) {
-    if (required) errors.push("eli5 stage requires eli_index.md");
+    errors.push("learn-change stage requires learning/index.md");
     return null;
   }
 
   const index = readText(indexPath);
-  if (!index.includes("# ELI5 图解索引")) errors.push("eli_index.md: missing index heading");
-  const entries = Array.from(index.matchAll(/^\|\s*(\d{2,})\s*\|\s*([^|\s]+\.md)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*$/gm));
-  if (!entries.length && required) errors.push("eli_index.md: requires at least one diagram entry");
+  if (!index.includes("# Change 学习图解索引")) {
+    errors.push("learning/index.md: missing index heading");
+  }
+  const entries = Array.from(
+    index.matchAll(/^\|\s*(\d{2,})\s*\|\s*([^|\s]+\.md)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*$/gm),
+  );
+  if (!entries.length && required) {
+    errors.push("learning/index.md: requires at least one diagram entry");
+  }
 
   const indexedFiles = new Set();
   let previousNumber = 0;
   for (const entry of entries) {
     const [, number, fileName, topic, summary] = entry;
     const numericNumber = Number(number);
-    if (!/^\d{2,}_[^/\\\\\s]+\.md$/.test(fileName)) {
-      errors.push(`eli_index.md: invalid diagram filename '${fileName}'`);
+    if (!diagramName.test(fileName)) {
+      errors.push(`learning/index.md: invalid diagram filename '${fileName}'`);
       continue;
     }
-    if (numericNumber <= previousNumber) errors.push("eli_index.md: diagram numbers must increase");
-    if (numericNumber !== previousNumber + 1) errors.push("eli_index.md: diagram numbers must start at 01 and be continuous");
+    if (numericNumber <= previousNumber) {
+      errors.push("learning/index.md: diagram numbers must increase");
+    }
+    if (numericNumber !== previousNumber + 1) {
+      errors.push("learning/index.md: diagram numbers must start at 01 and be continuous");
+    }
     previousNumber = numericNumber;
-    if (!fileName.startsWith(`${number}_`)) errors.push(`eli_index.md: '${fileName}' must start with '${number}_'`);
-    if (!topic.trim() || !summary.trim()) errors.push(`eli_index.md: '${fileName}' requires a topic and summary`);
+    if (!fileName.startsWith(`${number}_`)) {
+      errors.push(`learning/index.md: '${fileName}' must start with '${number}_'`);
+    }
+    if (!topic.trim() || !summary.trim()) {
+      errors.push(`learning/index.md: '${fileName}' requires a topic and summary`);
+    }
     indexedFiles.add(fileName);
   }
 
   for (const fileName of diagramFiles) {
-    if (!indexedFiles.has(fileName)) errors.push(`eli_index.md: missing entry for '${fileName}'`);
+    if (!indexedFiles.has(fileName)) {
+      errors.push(`learning/index.md: missing entry for '${fileName}'`);
+    }
   }
   for (const fileName of indexedFiles) {
-    if (!diagramFiles.includes(fileName)) errors.push(`eli_index.md: '${fileName}' does not exist`);
+    if (!diagramFiles.includes(fileName)) {
+      errors.push(`learning/index.md: '${fileName}' does not exist`);
+    }
   }
 
   for (const fileName of diagramFiles) {
-    const markdown = readText(join(change, fileName));
+    const markdown = readText(join(learningRoot, fileName));
     for (const heading of ["## 先看全图", "## 一步一步看", "## 术语小词典", "## 你现在能复述什么"]) {
-      if (!markdown.includes(heading)) errors.push(`${fileName}: missing '${heading}'`);
+      if (!markdown.includes(heading)) errors.push(`learning/${fileName}: missing '${heading}'`);
     }
     if (!/```(?:text)?\s*[\s\S]*?(?:->|\||\+--)[\s\S]*?```/.test(markdown)) {
-      errors.push(`${fileName}: requires an ASCII diagram in a fenced code block`);
+      errors.push(`learning/${fileName}: requires an ASCII diagram in a fenced code block`);
     }
-    if (/<\/?(?:html|head|body|svg|canvas|img|picture)\b/i.test(markdown)) {
-      errors.push(`${fileName}: must be Markdown, not HTML`);
+    if (
+      /<\/?(?:html|head|body|svg|canvas|img|picture)\b/i.test(markdown) ||
+      /!\[[^\]]*\]\([^)]+\)/.test(markdown)
+    ) {
+      errors.push(`learning/${fileName}: must be pure Markdown without HTML or image dependencies`);
     }
   }
   return indexPath;
@@ -1321,16 +1878,139 @@ function validateSpec(path, errors, warnings) {
   return { path, meta, body };
 }
 
-function validateMap(path, errors) {
+function validateProjectSkillMatrix(body, label, errors, repoRoot = null) {
+  const section = sectionBody(body, "### 项目 Skill 读取矩阵");
+  if (!section) return [];
+
+  const lines = section.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const headerIndex = lines.findIndex((line) =>
+    line.startsWith("|") &&
+    line.includes("Applies To") &&
+    line.includes("Project Skill") &&
+    line.includes("Trigger / Scope") &&
+    line.includes("Read Timing") &&
+    line.includes("Purpose"),
+  );
+  if (headerIndex < 0) {
+    errors.push(`${label}: project Skill matrix is missing the required five-column header`);
+    return [];
+  }
+
+  const entries = [];
+  const seenSkillPaths = new Set();
+  for (const line of lines.slice(headerIndex + 1)) {
+    if (!line.startsWith("|")) continue;
+    if (/^\|(?:\s*:?-{3,}:?\s*\|)+$/.test(line)) continue;
+    const cells = line.replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
+    if (cells.length !== 5) {
+      errors.push(`${label}: project Skill matrix row must contain five columns: ${line}`);
+      continue;
+    }
+
+    const appliesTo = stripInlineCode(cells[0]).split(/[\s,]+/).filter(Boolean);
+    if (!appliesTo.length || appliesTo.some((value) => value !== "ALL" && !/^T-\d{2,}$/.test(value))) {
+      errors.push(`${label}: invalid project Skill Applies To value '${cells[0]}'`);
+      continue;
+    }
+    if (new Set(appliesTo).size !== appliesTo.length) {
+      errors.push(`${label}: duplicate project Skill Applies To value '${cells[0]}'`);
+    }
+    for (const [column, value] of [
+      ["Trigger / Scope", cells[2]],
+      ["Read Timing", cells[3]],
+      ["Purpose", cells[4]],
+    ]) {
+      if (!value || value === "...") errors.push(`${label}: project Skill ${column} must be explicit`);
+    }
+
+    const skillValue = stripInlineCode(cells[1]);
+    if (skillValue.startsWith("无")) {
+      if (!`${skillValue} ${cells[2]}`.includes("已扫描")) {
+        errors.push(`${label}: no-project-Skill row must record the scanned scope`);
+      }
+      entries.push({ appliesTo: new Set(appliesTo), path: null });
+      continue;
+    }
+
+    const skillPath = stripPathTag(skillValue);
+    if (!skillPath) {
+      errors.push(`${label}: project Skill must be a Path-tagged SKILL.md or an explicit no-Skill row`);
+      continue;
+    }
+    const pathIssue = validatePathValue(skillPath);
+    if (pathIssue) errors.push(`${label}: invalid project Skill Path ${skillPath}: ${pathIssue}`);
+    if (skillPath.includes("{roots.")) {
+      errors.push(`${label}: project Skill Path must be project-relative, not a Speculo root Path: ${skillPath}`);
+    }
+    if (!skillPath.endsWith("/SKILL.md")) {
+      errors.push(`${label}: project Skill Path must end with /SKILL.md: ${skillPath}`);
+    }
+    if (PLACEHOLDER_RE.test(skillPath)) {
+      errors.push(`${label}: project Skill Path contains an unresolved placeholder: ${skillPath}`);
+    }
+    if (seenSkillPaths.has(skillPath)) {
+      errors.push(`${label}: duplicate project Skill Path ${skillPath}; combine its Applies To values`);
+    }
+    seenSkillPaths.add(skillPath);
+
+    if (repoRoot && !pathIssue && !skillPath.includes("{roots.") && !PLACEHOLDER_RE.test(skillPath)) {
+      const resolvedRepo = resolve(repoRoot);
+      const resolvedSkill = resolve(resolvedRepo, normalizeProjectPath(skillPath));
+      const relativeSkill = relative(resolvedRepo, resolvedSkill);
+      if (relativeSkill === "" || relativeSkill.split(sep)[0] === "..") {
+        errors.push(`${label}: project Skill Path escapes the project root: ${skillPath}`);
+      } else if (!isFile(resolvedSkill)) {
+        errors.push(`${label}: project Skill does not exist under --repo: ${skillPath}`);
+      } else {
+        try { resolveProjectSource(resolvedRepo, `<Path>${skillPath}</Path>`); }
+        catch (error) { errors.push(`${label}: ${error.message}`); }
+      }
+    }
+    entries.push({ appliesTo: new Set(appliesTo), path: skillPath });
+  }
+
+  if (!entries.length) errors.push(`${label}: project Skill matrix contains no data rows`);
+  const allNoSkill = entries.some((entry) => entry.path === null && entry.appliesTo.has("ALL"));
+  if (allNoSkill && entries.some((entry) => entry.path !== null)) {
+    errors.push(`${label}: an ALL no-project-Skill row conflicts with listed project Skills`);
+  }
+  return entries;
+}
+
+function validateProjectSkillCoverage(matrix, ticketIds, label, errors) {
+  if (!matrix.length) return;
+  const knownTicketIds = new Set(ticketIds);
+  for (const entry of matrix) {
+    for (const appliesTo of entry.appliesTo) {
+      if (appliesTo !== "ALL" && !knownTicketIds.has(appliesTo)) {
+        errors.push(`${label}: project Skill matrix references missing Ticket ${appliesTo}`);
+      }
+    }
+  }
+  for (const ticketId of knownTicketIds) {
+    if (!matrix.some((entry) => entry.appliesTo.has("ALL") || entry.appliesTo.has(ticketId))) {
+      errors.push(`${label}: project Skill matrix does not cover ${ticketId}`);
+    }
+  }
+}
+
+function validateMap(path, errors, repoRoot = null) {
   if (!isFile(path)) {
     errors.push("missing Tickets Map");
     return null;
   }
   const { meta, body } = parseFrontmatter(path);
+  if (meta.artifact === "goal-tickets-map") {
+    errors.push(...validateGoalMap({ path, meta, body }, dirname(path)).map(error => `${basename(path)}: ${error}`));
+    return { path, meta, body, projectSkillMatrix: [], goalMap: true };
+  }
+  errors.push(...validatePlanMap({ path, meta, body }, dirname(path)).map(error => `${basename(path)}: ${error}`));
   if (meta.artifact !== "tickets-map" || meta.schema_version !== DOMAIN_SCHEMA_VERSION) {
     errors.push(`${basename(path)}: artifact/schema_version must be tickets-map/${DOMAIN_SCHEMA_VERSION}`);
   }
   for (const heading of [
+    "### 总体实施背景",
+    "### 项目 Skill 读取矩阵",
     "## 2. 执行清单",
     "## 3. 依赖 DAG",
     "## 4. 合同覆盖矩阵",
@@ -1338,7 +2018,8 @@ function validateMap(path, errors) {
   ]) {
     if (!body.includes(heading)) errors.push(`${basename(path)}: missing '${heading}'`);
   }
-  return { path, meta, body };
+  const projectSkillMatrix = validateProjectSkillMatrix(body, basename(path), errors, repoRoot);
+  return { path, meta, body, projectSkillMatrix };
 }
 
 function validateGoalPlan(path, errors) {
@@ -1429,9 +2110,9 @@ function validateGoalPlan(path, errors) {
   return { path, meta, body };
 }
 
-function validateGoalPlanRuntimeLimits(path, change, goalPlan, errors) {
+function validateGoalPlanRuntimeLimits(path, change, goalPlan, errors, repoRoot = null) {
   if (!goalPlan) return;
-  const config = findSpecdevConfig(change);
+  const config = findSpecdevConfig(change, repoRoot);
   if (!config) {
     errors.push(`${basename(path)}: SpecDev config.json is required to validate execution limits`);
     return;
@@ -1633,6 +2314,9 @@ function validateTicket(path, errors) {
   const ticketId = String(meta.id);
   if (!/^T-\d{2,}$/.test(ticketId)) errors.push(`${basename(path)}: invalid Ticket id ${ticketId}`);
   if (!VALID_TICKET_STATUS.has(meta.status)) errors.push(`${basename(path)}: invalid status ${meta.status}`);
+  if (meta.kind != null && meta.kind !== "" && !VALID_TICKET_KIND.has(meta.kind)) {
+    errors.push(`${basename(path)}: invalid kind ${meta.kind}`);
+  }
   if (!VALID_DEPTH.has(meta.planning_depth)) {
     errors.push(`${basename(path)}: invalid planning_depth ${meta.planning_depth}`);
   }
@@ -2125,6 +2809,451 @@ function validateGitEvidence(repoRoot, changeStatus, errors) {
   }
 }
 
+function validateParentImplementation(change, parentStatus, stage, errors, warnings, repoRoot = null) {
+  const required = stage === "goal-plan";
+  const mapPath = join(change, "implementation-map.md");
+  const planPath = join(change, "implementation-plan.md");
+  if (!required && !isFile(mapPath) && !isFile(planPath)) return null;
+  if (!isFile(mapPath)) errors.push("goal-plan stage requires implementation-map.md");
+  if (!isFile(planPath)) errors.push("goal-plan stage requires implementation-plan.md");
+  if (!isFile(mapPath) || !isFile(planPath)) return null;
+
+  const parentName = basename(change);
+  const map = parseFrontmatter(mapPath);
+  const plan = parseFrontmatter(planPath);
+  const mapKeys = ["schema_version", "artifact", "change", "status", "revision", "members", "tasks", "dependencies", "serializations"];
+  const planKeys = ["schema_version", "artifact", "change", "status", "source_map_revision", "orchestration", "lead", "implementation_agent_limit", "integration_attempt_limit", "ticket_workspace_policy", "integration_gate", "ready_for_execution"];
+  for (const [label, meta, expected] of [
+    ["implementation-map.md", map.meta, mapKeys],
+    ["implementation-plan.md", plan.meta, planKeys],
+  ]) {
+    const missing = expected.filter((key) => !(key in meta));
+    const unexpected = Object.keys(meta).filter((key) => !expected.includes(key));
+    if (missing.length) errors.push(`${label}: missing keys ${JSON.stringify(missing)}`);
+    if (unexpected.length) errors.push(`${label}: unexpected keys ${JSON.stringify(unexpected.sort())}`);
+  }
+  if (map.meta.schema_version !== IMPLEMENTATION_MAP_SCHEMA_VERSION || map.meta.artifact !== "implementation-map") {
+    errors.push("implementation-map.md: artifact/schema_version must be implementation-map/1");
+  }
+  if (plan.meta.schema_version !== IMPLEMENTATION_PLAN_SCHEMA_VERSION || plan.meta.artifact !== "implementation-plan") {
+    errors.push("implementation-plan.md: artifact/schema_version must be implementation-plan/1");
+  }
+  if (map.meta.change !== parentName || plan.meta.change !== parentName) {
+    errors.push("parent implementation artifacts must name their containing change");
+  }
+  const artifactStatuses = new Set(["ready", "in_progress", "blocked", "completed"]);
+  if (!artifactStatuses.has(map.meta.status)) errors.push(`implementation-map.md: invalid status ${map.meta.status}`);
+  if (!artifactStatuses.has(plan.meta.status)) errors.push(`implementation-plan.md: invalid status ${plan.meta.status}`);
+  if (!Number.isInteger(map.meta.revision) || map.meta.revision < 1) {
+    errors.push("implementation-map.md: revision must be a positive integer");
+  }
+  if (plan.meta.source_map_revision !== map.meta.revision) {
+    errors.push("implementation-plan.md: source_map_revision must equal Implementation Map revision");
+  }
+  if (plan.meta.orchestration !== "lead-directed" || typeof plan.meta.lead !== "string" || !plan.meta.lead.trim()) {
+    errors.push("implementation-plan.md: lead-directed orchestration requires a recoverable Lead");
+  }
+  for (const key of ["implementation_agent_limit", "integration_attempt_limit"]) {
+    if (!Number.isInteger(plan.meta[key]) || plan.meta[key] < 1) {
+      errors.push(`implementation-plan.md: ${key} must be a positive integer`);
+    }
+  }
+  const validStrategy =
+    (plan.meta.ticket_workspace_policy === "current" && plan.meta.integration_gate === "direct-parent") ||
+    (plan.meta.ticket_workspace_policy === "required" && plan.meta.integration_gate === "candidate-merge");
+  if (!validStrategy) {
+    errors.push("implementation-plan.md: workspace/integration strategy must be current/direct-parent or required/candidate-merge");
+  }
+  const readyStatuses = new Set(["ready", "in_progress"]);
+  if (
+    typeof plan.meta.ready_for_execution !== "boolean" ||
+    (plan.meta.ready_for_execution === true) !== readyStatuses.has(plan.meta.status)
+  ) {
+    errors.push("implementation-plan.md: ready_for_execution must match status");
+  }
+  for (const heading of [
+    "## 1. Members and Source Authority",
+    "## 2. Composite Ticket Inventory",
+    "## 3. Implementation Super-DAG",
+    "## 4. Conflict and Serialization",
+    "## 5. Contract and Path Coverage",
+    "## 6. Revision Log",
+  ]) {
+    if (!map.body.includes(heading)) errors.push(`implementation-map.md: missing '${heading}'`);
+  }
+  for (const heading of [
+    "## 1. Outcome and Authority",
+    "## 2. Ready Frontier and Waves",
+    "## 3. Workspace and Dispatch Contract",
+    "## 4. Repository Integration Queue",
+    "## 5. Gates and Aggregate Verification",
+    "## 6. Conflict, Drift and Recovery",
+    "## 7. Progress and Decisions",
+  ]) {
+    if (!plan.body.includes(heading)) errors.push(`implementation-plan.md: missing '${heading}'`);
+  }
+
+  const members = requireList(map.meta, "members", "implementation-map.md", errors).map(String);
+  const tasks = requireList(map.meta, "tasks", "implementation-map.md", errors).map(String);
+  const dependencies = requireList(map.meta, "dependencies", "implementation-map.md", errors).map(String);
+  const serializations = requireList(map.meta, "serializations", "implementation-map.md", errors).map(String);
+  if (members.length < 2) errors.push("implementation-map.md: parent implementation requires at least two members");
+  if (!tasks.length) errors.push("implementation-map.md: tasks must contain the child Ticket inventory");
+  for (const [key, values] of [["members", members], ["tasks", tasks], ["dependencies", dependencies], ["serializations", serializations]]) {
+    if (new Set(values).size !== values.length) errors.push(`implementation-map.md: ${key} must be unique`);
+  }
+  if (members.includes(parentName)) errors.push("implementation-map.md: parent change cannot include itself");
+
+  const changesRoot = dirname(change);
+  const memberSet = new Set(members);
+  const memberStatuses = new Map();
+  const ticketByTask = new Map();
+  const expectedTasks = new Set();
+  const expectedInternalEdges = new Set();
+  let activeImplementations = 0;
+  let activeCurrentWriters = 0;
+  const integratingByRef = new Map();
+
+  for (const member of members) {
+    if (!CHANGE_NAME.test(member)) {
+      errors.push(`implementation-map.md: invalid member change name ${member}`);
+      continue;
+    }
+    const memberRoot = join(changesRoot, member);
+    if (!isDirectory(memberRoot)) {
+      errors.push(`implementation-map.md: member change does not exist: ${member}`);
+      continue;
+    }
+    if (isFile(join(memberRoot, "implementation-map.md"))) {
+      errors.push(`implementation-map.md: nested parent implementation is not supported in v1: ${member}`);
+    }
+
+    const memberErrors = [];
+    const memberWarnings = [];
+    const status = validateChangeStatus(join(memberRoot, ".status.json"), member, memberErrors);
+    if (status) {
+      memberStatuses.set(member, status);
+      if (status.change_status === "archived") memberErrors.push("archived change cannot be an implementation member");
+      if (status.current_work !== null && status.current_work !== "specdev/implement") {
+        memberErrors.push(`current_work=${status.current_work} conflicts with parent implementation ownership`);
+      }
+      for (const worktree of Array.isArray(status.worktrees) ? status.worktrees : []) {
+        if (worktree?.status === "active") {
+          activeImplementations += 1;
+          if (worktree.workspace_ref === "current") activeCurrentWriters += 1;
+          if (plan.meta.ticket_workspace_policy === "current" && worktree.workspace_ref !== "current") {
+            memberErrors.push(`${worktree.ticket_id}: active workspace must follow parent current policy`);
+          }
+          if (plan.meta.ticket_workspace_policy === "required" && worktree.workspace_ref === "current") {
+            memberErrors.push(`${worktree.ticket_id}: active workspace must follow parent required policy`);
+          }
+        }
+        if (worktree?.status === "integrating") {
+          const key = String(worktree.parent_branch ?? "<unknown-ref>");
+          integratingByRef.set(key, (integratingByRef.get(key) ?? 0) + 1);
+        }
+        if (Number.isInteger(worktree?.integration?.attempts) && worktree.integration.attempts > plan.meta.integration_attempt_limit) {
+          memberErrors.push(`${worktree.ticket_id}: integration attempts ${worktree.integration.attempts} exceed parent limit ${plan.meta.integration_attempt_limit}`);
+        }
+      }
+    }
+
+    const specPath = join(memberRoot, "spec.md");
+    const childSpec = isFile(specPath) ? validateSpec(specPath, memberErrors, memberWarnings) : null;
+    if (!childSpec) memberErrors.push("Ready Spec is required before parent creation");
+    else {
+      if (childSpec.meta.change !== member) memberErrors.push("spec.md: change must equal member directory name");
+      if (childSpec.meta.status !== "ready" || childSpec.meta.ready_for_tickets !== true) {
+        memberErrors.push("Spec must have status=ready and ready_for_tickets=true");
+      }
+    }
+
+    const childMapPath = join(memberRoot, "tickets-map.md");
+    const childMap = isFile(childMapPath) ? validateMap(childMapPath, memberErrors, repoRoot) : null;
+    if (!childMap) memberErrors.push("Ready Tickets Map is required before parent creation");
+    else {
+      if (childMap.meta.change !== member) memberErrors.push("tickets-map.md: change must equal member directory name");
+      if (!new Set(["ready", "in_progress", "completed"]).has(childMap.meta.status)) {
+        memberErrors.push("Tickets Map status must be ready, in_progress, or completed");
+      }
+    }
+
+    const ticketRoot = join(memberRoot, "ticket");
+    const ticketFiles = isDirectory(ticketRoot)
+      ? readdirSync(ticketRoot).filter((name) => name.endsWith(".md")).sort()
+      : [];
+    if (!ticketFiles.length) memberErrors.push("Ready Tickets are required before parent creation");
+    const childTickets = new Map();
+    for (const name of ticketFiles) {
+      const artifact = validateTicket(join(ticketRoot, name), memberErrors);
+      if (artifact) memberErrors.push(...validateTicketPlan(artifact, { repoRoot }).map(error => `${name}: ${error}`));
+      if (!artifact) continue;
+      const ticketId = String(artifact.meta.id);
+      if (artifact.meta.change !== member) memberErrors.push(`${name}: change must equal member directory name`);
+      if (childTickets.has(ticketId)) memberErrors.push(`duplicate Ticket id ${ticketId}`);
+      childTickets.set(ticketId, artifact);
+      const numericId = ticketId.replace(/^T-/, "");
+      if (!name.startsWith(`${numericId}-`)) memberErrors.push(`${name}: filename prefix must match ${ticketId}`);
+      if (childMap && !childMap.body.includes(ticketId)) memberErrors.push(`${name}: Ticket id is absent from Tickets Map`);
+      if (childSpec) {
+        for (const contractId of artifact.meta.contract_ids ?? []) {
+          if (!childSpec.body.includes(String(contractId))) memberErrors.push(`${name}: contract ${contractId} not found in Spec`);
+        }
+      }
+
+      const taskId = `${member}::${ticketId}`;
+      expectedTasks.add(taskId);
+      ticketByTask.set(taskId, { artifact, member, memberRoot, status });
+      const terminal = new Set(["done", "cancelled"]).has(artifact.meta.status);
+      if (!terminal) {
+        if (map.meta.status === "ready" && (artifact.meta.status !== "ready" || artifact.meta.ready !== true)) {
+          memberErrors.push(`${ticketId}: parent creation requires status=ready and ready=true`);
+        } else if (new Set(["ready", "in_progress", "review"]).has(artifact.meta.status) && artifact.meta.ready !== true) {
+          memberErrors.push(`${ticketId}: executable Ticket must keep ready=true`);
+        } else if (new Set(["blocked", "deviated"]).has(artifact.meta.status)) {
+          // A local blocker does not revoke unrelated nodes' execution gate.
+          // The controller excludes this node and its dependency closure; only a
+          // global blocker or an empty legal frontier pauses the whole parent.
+        } else if (artifact.meta.status === "draft") {
+          memberErrors.push(`${ticketId}: draft Ticket cannot belong to a parent implementation`);
+        }
+      }
+    }
+
+    if (childMap) {
+      memberErrors.push(...validateInvocationCoverage(childTickets, childMap.projectSkillMatrix));
+      validateProjectSkillCoverage(
+        childMap.projectSkillMatrix,
+        childTickets.keys(),
+        basename(childMap.path),
+        memberErrors,
+      );
+    }
+
+    for (const [ticketId, artifact] of childTickets) {
+      for (const dependency of (artifact.meta.blocked_by ?? []).map(String)) {
+        if (!childTickets.has(dependency)) memberErrors.push(`${ticketId}: blocked_by references missing ${dependency}`);
+        expectedInternalEdges.add(`${member}::${ticketId} <- ${member}::${dependency}`);
+      }
+    }
+    const childGraph = new Map([...childTickets].map(([ticketId, artifact]) => [ticketId, (artifact.meta.blocked_by ?? []).map(String)]));
+    const childCycle = findCycle(childGraph);
+    if (childCycle) memberErrors.push(`Ticket dependency cycle: ${childCycle.join(" -> ")}`);
+
+    if (childSpec) {
+      const declared = new Set(childSpec.body.match(/\bAC-\d+\b/g) ?? []);
+      const covered = new Set([...childTickets.values()].flatMap((artifact) => (artifact.meta.contract_ids ?? []).map(String)));
+      const uncovered = [...declared].filter((id) => !covered.has(id) && !(childMap && new RegExp(`${escapeRegExp(id)}.*\\bdeferred\\b`, "i").test(childMap.body)));
+      if (uncovered.length) memberErrors.push(`Spec acceptance contracts are not covered by Tickets: ${JSON.stringify(uncovered.sort())}`);
+    }
+    if (status?.change_status === "completed") {
+      const unfinished = [...childTickets].filter(([, artifact]) => !new Set(["done", "cancelled"]).has(artifact.meta.status)).map(([id]) => id);
+      if (unfinished.length) memberErrors.push(`completed member has unfinished Tickets: ${JSON.stringify(unfinished)}`);
+    }
+
+    const goalPath = join(memberRoot, "goal-plan.md");
+    if (isFile(goalPath)) {
+      const goal = validateGoalPlan(goalPath, memberErrors);
+      if (goal && (
+        goal.meta.ticket_workspace_policy !== plan.meta.ticket_workspace_policy ||
+        goal.meta.integration_gate !== plan.meta.integration_gate
+      )) {
+        memberErrors.push("Goal Plan workspace/integration strategy conflicts with parent Implementation Plan");
+      }
+    }
+    errors.push(...memberErrors.map((message) => `${member}: ${message}`));
+    warnings.push(...memberWarnings.map((message) => `${member}: ${message}`));
+  }
+
+  const taskSet = new Set(tasks);
+  for (const task of tasks) {
+    if (!/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*::T-\d{2,}$/.test(task)) {
+      errors.push(`implementation-map.md: invalid composite task '${task}'`);
+    }
+  }
+  const missingTasks = [...expectedTasks].filter((task) => !taskSet.has(task)).sort();
+  const extraTasks = tasks.filter((task) => !expectedTasks.has(task)).sort();
+  if (missingTasks.length || extraTasks.length) {
+    errors.push(`implementation-map.md: tasks must exactly match child Tickets; missing=${JSON.stringify(missingTasks)} extra=${JSON.stringify(extraTasks)}`);
+  }
+
+  const graph = new Map(tasks.map((task) => [task, []]));
+  const dependencySet = new Set(dependencies);
+  for (const edge of dependencies) {
+    const match = /^([^ ]+::T-\d{2,}) <- ([^ ]+::T-\d{2,})$/.exec(edge);
+    if (!match) {
+      errors.push(`implementation-map.md: invalid dependency '${edge}'`);
+      continue;
+    }
+    const [, dependent, prerequisite] = match;
+    if (!taskSet.has(dependent) || !taskSet.has(prerequisite)) {
+      errors.push(`implementation-map.md: dependency endpoints must be composite tasks: ${edge}`);
+    } else if (dependent === prerequisite) {
+      errors.push(`implementation-map.md: dependency cannot be self-referential: ${edge}`);
+    } else {
+      graph.get(dependent).push(prerequisite);
+      const dependentMember = dependent.split("::")[0];
+      const prerequisiteMember = prerequisite.split("::")[0];
+      if (dependentMember === prerequisiteMember && !expectedInternalEdges.has(edge)) {
+        errors.push(`implementation-map.md: same-member dependency must come from child blocked_by: ${edge}`);
+      }
+    }
+  }
+  const missingInternalEdges = [...expectedInternalEdges].filter((edge) => !dependencySet.has(edge)).sort();
+  if (missingInternalEdges.length) {
+    errors.push(`implementation-map.md: missing child Ticket dependencies ${JSON.stringify(missingInternalEdges)}`);
+  }
+  const cycle = findCycle(graph);
+  if (cycle) errors.push(`implementation super-DAG cycle: ${cycle.join(" -> ")}`);
+
+  const serializationPairs = new Set();
+  for (const edge of serializations) {
+    const match = /^([^ ]+::T-\d{2,}) <> ([^ ]+::T-\d{2,})$/.exec(edge);
+    if (!match) {
+      errors.push(`implementation-map.md: invalid serialization '${edge}'`);
+      continue;
+    }
+    const [, left, right] = match;
+    if (!taskSet.has(left) || !taskSet.has(right)) {
+      errors.push(`implementation-map.md: serialization endpoints must be composite tasks: ${edge}`);
+      continue;
+    }
+    if (left === right) {
+      errors.push(`implementation-map.md: serialization cannot be self-referential: ${edge}`);
+      continue;
+    }
+    const key = [left, right].sort().join("\0");
+    if (serializationPairs.has(key)) errors.push(`implementation-map.md: duplicate unordered serialization pair: ${edge}`);
+    serializationPairs.add(key);
+  }
+
+  const unfinishedTasks = [...ticketByTask]
+    .filter(([, value]) => !new Set(["done", "cancelled"]).has(value.artifact.meta.status))
+    .map(([task]) => task);
+  for (let index = 0; index < unfinishedTasks.length; index += 1) {
+    const leftId = unfinishedTasks[index];
+    const left = ticketByTask.get(leftId).artifact;
+    for (const rightId of unfinishedTasks.slice(index + 1)) {
+      if (leftId.split("::")[0] === rightId.split("::")[0]) continue;
+      if (
+        transitivelyDepends(graph, leftId, rightId) ||
+        transitivelyDepends(graph, rightId, leftId) ||
+        serializationPairs.has([leftId, rightId].sort().join("\0"))
+      ) continue;
+      const right = ticketByTask.get(rightId).artifact;
+      const overlaps = [];
+      for (const leftPath of left.meta.writable_paths ?? []) {
+        for (const rightPath of right.meta.writable_paths ?? []) {
+          if (pathsOverlap(String(leftPath), String(rightPath))) overlaps.push([String(leftPath), String(rightPath)]);
+        }
+      }
+      if (overlaps.length) {
+        errors.push(`composite tasks ${leftId}/${rightId} have writable overlap without dependency or serialization: ${JSON.stringify(overlaps.slice(0, 3))}`);
+      }
+    }
+  }
+
+  for (const entry of readdirSync(changesRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === parentName) continue;
+    const otherMapPath = join(changesRoot, entry.name, "implementation-map.md");
+    if (!isFile(otherMapPath)) continue;
+    const otherMap = parseFrontmatter(otherMapPath).meta;
+    if (!Array.isArray(otherMap.members)) continue;
+    let otherStatus = null;
+    try {
+      otherStatus = JSON.parse(readText(join(changesRoot, entry.name, ".status.json"))).change_status;
+    } catch {
+      // Invalid competing parents still own their members conservatively.
+    }
+    if (new Set(["completed", "archived"]).has(otherStatus)) continue;
+    const overlap = otherMap.members.map(String).filter((member) => memberSet.has(member));
+    if (overlap.length) errors.push(`member changes already belong to unfinished parent implementation ${entry.name}: ${JSON.stringify(overlap)}`);
+  }
+
+  const config = findSpecdevConfig(change, repoRoot);
+  const configuredAgents = positiveConfigLimit(config, "max_implementation_agents", 0);
+  const configuredAttempts = positiveConfigLimit(config, "max_integration_attempts", 0);
+  if (!config || config.schema_version !== CONFIG_SCHEMA_VERSION || configuredAgents === 0 || configuredAttempts === 0) {
+    errors.push("implementation-plan.md: SpecDev config v5 with positive execution limits is required");
+  } else {
+    if (plan.meta.implementation_agent_limit > configuredAgents) {
+      errors.push(`implementation-plan.md: implementation_agent_limit ${plan.meta.implementation_agent_limit} exceeds config max_implementation_agents ${configuredAgents}`);
+    }
+    if (plan.meta.integration_attempt_limit > configuredAttempts) {
+      errors.push(`implementation-plan.md: integration_attempt_limit ${plan.meta.integration_attempt_limit} exceeds config max_integration_attempts ${configuredAttempts}`);
+    }
+  }
+  if (activeImplementations > plan.meta.implementation_agent_limit) {
+    errors.push(`parent implementation agent limit exceeded: ${activeImplementations} active for limit ${plan.meta.implementation_agent_limit}`);
+  }
+  if (plan.meta.ticket_workspace_policy === "current" && activeCurrentWriters > 1) {
+    errors.push(`parent current policy permits only one active implementation writer; found ${activeCurrentWriters}`);
+  }
+  for (const [ref, count] of integratingByRef) {
+    if (count > 1) errors.push(`repository/ref integration must be serialized for ${ref}; found ${count}`);
+  }
+
+  if (required && parentStatus && new Set(["active", "blocked"]).has(parentStatus.change_status) && !new Set(["specdev/goal-plan"]).has(parentStatus.current_work)) {
+    errors.push("parent active/blocked status must keep current_work=specdev/goal-plan");
+  }
+  if (parentStatus?.change_status === "completed") {
+    const incomplete = members.filter((member) => memberStatuses.get(member)?.change_status !== "completed");
+    if (incomplete.length) errors.push(`parent implementation is completed while members remain incomplete: ${JSON.stringify(incomplete)}`);
+    const unfinished = [...ticketByTask].filter(([, value]) => !new Set(["done", "cancelled"]).has(value.artifact.meta.status)).map(([task]) => task);
+    if (unfinished.length) errors.push(`completed parent implementation has unfinished composite tasks: ${JSON.stringify(unfinished)}`);
+    if (map.meta.status !== "completed" || plan.meta.status !== "completed") {
+      errors.push("completed parent requires completed Implementation Map and Implementation Plan");
+    }
+    if (
+      parentStatus.current_work !== null ||
+      !Array.isArray(parentStatus.blockers) || parentStatus.blockers.length > 0 ||
+      !Array.isArray(parentStatus.deviations) || parentStatus.deviations.length > 0
+    ) {
+      errors.push("completed parent requires null current_work and no blockers or deviations");
+    }
+    const activeMemberWork = [...memberStatuses]
+      .flatMap(([member, status]) => (status.worktrees ?? []).map((worktree) => ({ member, worktree })))
+      .filter(({ worktree }) => new Set(["planned", "active", "review", "integrating", "blocked"]).has(worktree?.status) || worktree?.integration?.status === "candidate")
+      .map(({ member, worktree }) => `${member}::${worktree.ticket_id}`);
+    if (activeMemberWork.length) {
+      errors.push(`completed parent has active member worktrees or candidates: ${JSON.stringify(activeMemberWork)}`);
+    }
+    for (const [task, value] of ticketByTask) {
+      if (value.artifact.meta.status !== "done") continue;
+      if (!isFile(join(value.memberRoot, "evidence", `${value.artifact.meta.id}.md`))) {
+        errors.push(`${task}: completed parent requires child Ticket Evidence`);
+      }
+      const worktree = value.status?.worktrees?.find((entry) => entry?.ticket_id === value.artifact.meta.id);
+      if (!worktree || !new Set(["integrated", "removed"]).has(worktree.status)) {
+        errors.push(`${task}: completed parent requires integrated or removed child workspace record`);
+      }
+    }
+    const evidencePath = join(change, "evidence", "implementation-orchestration.md");
+    if (!isFile(evidencePath)) {
+      errors.push("completed parent requires evidence/implementation-orchestration.md");
+    } else {
+      const evidence = readText(evidencePath);
+      for (const heading of [
+        "## 1. Parent Plan and Final Revision",
+        "## 2. Member and Ticket Completion",
+        "## 3. Dependency and Serialization Audit",
+        "## 4. Repository Integration Audit",
+        "## 5. Aggregate Verification",
+        "## 6. Contract, Drift and Deviation Audit",
+        "## 7. Residual Risk and Boundary",
+      ]) {
+        if (!evidence.includes(heading)) errors.push(`evidence/implementation-orchestration.md: missing '${heading}'`);
+      }
+    }
+  } else if (map.meta.status === "completed" || plan.meta.status === "completed") {
+    errors.push("completed Implementation Map/Plan requires completed parent change status");
+  }
+  if (plan.meta.ready_for_execution === true && !new Set(["ready", "in_progress"]).has(map.meta.status)) {
+    errors.push("ready Implementation Plan requires a ready or in_progress Implementation Map");
+  }
+  return { map, plan, members, tasks, memberStatuses, ticketByTask };
+}
+
 function validateChange(change, stage = null, repoRoot = null) {
   const errors = [];
   const warnings = [];
@@ -2132,9 +3261,17 @@ function validateChange(change, stage = null, repoRoot = null) {
     return { errors: [`change directory does not exist: ${change}`], warnings };
   }
 
+  const workspace = resolveWorkspaceContract(repoRoot, change);
+  errors.push(...workspace.errors);
+
   const changeStatus = validateChangeStatus(join(change, ".status.json"), basename(change), errors);
+  validateParentImplementation(change, changeStatus, stage, errors, warnings, repoRoot);
+  errors.push(...validateInitiative(change));
   if (isFile(join(change, "source-issue.md"))) {
     errors.push("obsolete source-issue.md is forbidden; use source.md without compatibility fallback");
+  }
+  if (isFile(join(change, "capture.md"))) {
+    errors.push("capture.md is workspace-owned at specdev/capture.md; change-level copies are forbidden");
   }
   const sourceRequired = stage === "triage";
   const sourcePath = join(change, "source.md");
@@ -2145,23 +3282,31 @@ function validateChange(change, stage = null, repoRoot = null) {
   const triage = isFile(triagePath) || sourceRequired
     ? validateTriage(triagePath, basename(change), errors)
     : null;
+  const publishPath = join(change, "publish.md");
+  const publishRequired = Boolean(
+    triage && new Set(["pending", "published", "publish-failed", "waived"]).has(triage.meta.publish_action),
+  );
+  if (isFile(publishPath) || publishRequired) {
+    validatePublish(publishPath, basename(change), triage, errors);
+  }
   const diagnosisPath = join(change, "diagnosis.md");
   if (isFile(diagnosisPath) || stage === "diagnosis") {
     validateDiagnosis(diagnosisPath, basename(change), errors);
   }
   validateReviews(change, stage === "review", errors);
   validatePrototypes(change, stage === "prototype", errors);
-  validateEli5(change, stage === "eli5", errors);
+  validateChangeLearning(change, stage === "learn-change", errors);
 
-  const specRequired = new Set(["spec", "tickets", "goal-plan", "implement", "complete"]).has(stage);
+  const isParentImplementation = isFile(join(change, "implementation-map.md"));
+  const specRequired = new Set(["spec", "tickets", "goal-plan", "implement", "complete"]).has(stage) && !isParentImplementation;
   const specPath = join(change, "spec.md");
   const spec = isFile(specPath) || specRequired
     ? validateSpec(specPath, errors, warnings)
     : null;
   const ticketMode = isDirectory(join(change, "ticket"));
-  const mapRequired = new Set(["tickets", "goal-plan"]).has(stage) || (stage === "implement" && ticketMode);
+  const mapRequired = !isParentImplementation && (new Set(["tickets", "goal-plan"]).has(stage) || (stage === "implement" && ticketMode));
   const mapPath = join(change, "tickets-map.md");
-  const ticketsMap = isFile(mapPath) || mapRequired ? validateMap(mapPath, errors) : null;
+  const ticketsMap = isFile(mapPath) || mapRequired ? validateMap(mapPath, errors, repoRoot) : null;
   const goalPlanPath = join(change, "goal-plan.md");
   const goalPlan = isFile(goalPlanPath) || stage === "goal-plan"
     ? validateGoalPlan(goalPlanPath, errors)
@@ -2183,7 +3328,7 @@ function validateChange(change, stage = null, repoRoot = null) {
   }
 
   const ticketDir = join(change, "ticket");
-  const ticketsRequired = new Set(["tickets", "goal-plan"]).has(stage) || (stage === "implement" && ticketMode);
+  const ticketsRequired = !isParentImplementation && (new Set(["tickets", "goal-plan"]).has(stage) || (stage === "implement" && ticketMode));
   const ticketFiles = isDirectory(ticketDir)
     ? readdirSync(ticketDir)
         .filter((name) => name.endsWith(".md"))
@@ -2200,6 +3345,7 @@ function validateChange(change, stage = null, repoRoot = null) {
   for (const path of ticketFiles) {
     const artifact = validateTicket(path, errors);
     if (!artifact) continue;
+    errors.push(...validateTicketPlan(artifact, { repoRoot, requirePlan: stage === "implement" }).map(error => `${basename(path)}: ${error}`));
     const ticketId = String(artifact.meta.id);
     if (artifact.meta.change !== basename(change)) {
       errors.push(`${basename(path)}: change must equal directory name ${basename(change)}`);
@@ -2222,6 +3368,16 @@ function validateChange(change, stage = null, repoRoot = null) {
     }
   }
 
+  if (ticketsMap && !ticketsMap.goalMap) {
+    errors.push(...validateInvocationCoverage(tickets, ticketsMap.projectSkillMatrix));
+    validateProjectSkillCoverage(
+      ticketsMap.projectSkillMatrix,
+      tickets.keys(),
+      basename(ticketsMap.path),
+      errors,
+    );
+  }
+
   if (stage === "implement" && ticketMode && changeStatus) {
     const worktreesByTicket = new Map(
       (Array.isArray(changeStatus.worktrees) ? changeStatus.worktrees : [])
@@ -2241,7 +3397,7 @@ function validateChange(change, stage = null, repoRoot = null) {
     }
   }
   if (changeStatus && goalPlan) {
-    validateGoalPlanRuntimeLimits(goalPlan.path, change, goalPlan, errors);
+    validateGoalPlanRuntimeLimits(goalPlan.path, change, goalPlan, errors, repoRoot);
     const attemptLimit = Number.isInteger(goalPlan.meta.integration_attempt_limit) ? goalPlan.meta.integration_attempt_limit : null;
     if (attemptLimit !== null) {
       for (const worktree of changeStatus.worktrees ?? []) {
@@ -2256,21 +3412,19 @@ function validateChange(change, stage = null, repoRoot = null) {
 
   if (spec) {
     const declaredContracts = new Set(spec.body.match(/\bAC-\d+\b/g) ?? []);
-    if (tickets.size > 0 || ticketsMap) {
-      const coveredContracts = new Set(
-        [...tickets.values()].flatMap((artifact) =>
-          (artifact.meta.contract_ids ?? []).map(String),
-        ),
+    const coveredContracts = new Set(
+      [...tickets.values()].flatMap((artifact) =>
+        (artifact.meta.contract_ids ?? []).map(String),
+      ),
+    );
+    let uncovered = [...declaredContracts].filter((id) => !coveredContracts.has(id)).sort();
+    if (ticketsMap) {
+      uncovered = uncovered.filter(
+        (id) => !new RegExp(`${escapeRegExp(id)}.*\\bdeferred\\b`, "i").test(ticketsMap.body),
       );
-      let uncovered = [...declaredContracts].filter((id) => !coveredContracts.has(id)).sort();
-      if (ticketsMap) {
-        uncovered = uncovered.filter(
-          (id) => !new RegExp(`${escapeRegExp(id)}.*\\bdeferred\\b`, "i").test(ticketsMap.body),
-        );
-      }
-      if (uncovered.length) {
-        errors.push(`Spec acceptance contracts are not covered by Tickets: ${JSON.stringify(uncovered)}`);
-      }
+    }
+    if (uncovered.length) {
+      errors.push(`Spec acceptance contracts are not covered by Tickets: ${JSON.stringify(uncovered)}`);
     }
     if (spec.meta.ready_for_tickets === true && !declaredContracts.size) {
       errors.push("ready Spec must define at least one AC-### acceptance contract");
@@ -2411,6 +3565,7 @@ function validateChange(change, stage = null, repoRoot = null) {
   if (
     stage === "complete" &&
     !ticketFiles.length &&
+    !isFile(join(change, "implementation-map.md")) &&
     !isFile(join(change, "evidence", "direct-spec.md"))
   ) {
     errors.push("complete stage without Tickets requires evidence/direct-spec.md");
@@ -2421,6 +3576,13 @@ function validateChange(change, stage = null, repoRoot = null) {
     new Set(["pending-close", "close-failed"]).has(triage.meta.external_action)
   ) {
     errors.push(`complete stage cannot archive external_action=${triage.meta.external_action}`);
+  }
+  if (
+    stage === "complete" &&
+    triage &&
+    new Set(["pending", "publish-failed"]).has(triage.meta.publish_action)
+  ) {
+    errors.push(`complete stage cannot archive publish_action=${triage.meta.publish_action}`);
   }
 
   for (const path of walk(change).filter((item) => isFile(item) && extname(item) === ".md")) {
@@ -2449,7 +3611,7 @@ function printResults(errors, warnings) {
 }
 
 function usage() {
-  console.error("Usage: node validate-specdev.mjs [--stage <stage>] [--repo <project-root>] <change-directory> | --self-check");
+  console.error("Usage: node validate-specdev.mjs [--stage <stage>] [--repo <project-root>] <change-directory> | --self-check | --capture <capture.md>");
   return 2;
 }
 
@@ -2457,6 +3619,7 @@ function main(argv) {
   let selfCheckRequested = false;
   let stage = null;
   let repoRoot = null;
+  let capturePath = null;
   const positional = [];
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -2472,6 +3635,11 @@ function main(argv) {
       index += 1;
     } else if (arg.startsWith("--repo=")) {
       repoRoot = arg.slice("--repo=".length);
+    } else if (arg === "--capture") {
+      capturePath = argv[index + 1] ?? null;
+      index += 1;
+    } else if (arg.startsWith("--capture=")) {
+      capturePath = arg.slice("--capture=".length);
     } else if (arg.startsWith("--")) {
       return usage();
     } else {
@@ -2480,11 +3648,17 @@ function main(argv) {
   }
   if (stage !== null && !VALID_STAGES.has(stage)) return usage();
   if (selfCheckRequested) {
-    if (positional.length || stage !== null) return usage();
+    if (positional.length || stage !== null || capturePath) return usage();
     const scriptDirectory = dirname(fileURLToPath(import.meta.url));
     const root = resolve(scriptDirectory, "..", "..");
     const result = selfCheck(root);
     return printResults(result.errors, result.warnings);
+  }
+  if (capturePath) {
+    if (positional.length || stage !== null || repoRoot) return usage();
+    const errors = [];
+    validateCapture(resolve(capturePath), errors);
+    return printResults(errors, []);
   }
   if (positional.length === 1) {
     const result = validateChange(resolve(positional[0]), stage, repoRoot);
@@ -2493,4 +3667,9 @@ function main(argv) {
   return usage();
 }
 
-process.exitCode = main(process.argv.slice(2));
+export { parseFrontmatter, validateChange, validateTicket, validateMap, pathsOverlap, findCycle, validateCapture };
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { process.exitCode = main(process.argv.slice(2)); }
+  catch (error) { console.error(`ERROR: ${error.message}`); process.exitCode = 1; }
+}

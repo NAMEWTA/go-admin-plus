@@ -91,6 +91,19 @@ subagent 不写本 Evidence；以上内容由 Lead 从实际 workspace、Git 和
 
 集成失败时明确父 HEAD 是否推进、失败命令、旧 SHA 和恢复条件。
 
+### Failure History And Lead Recovery
+
+| 轮次 | 阶段 | Checkpoint/candidate | 失败事实 | 下一轮变化 |
+|---|---|---|---|---|
+| ... | implementation / review / direct-parent / parent-candidate | `<sha-or-locator>` | blocker、命令与摘要 | 首次失败待定 / Lead 决定 |
+
+- **共同失败模式：** not-applicable / ...
+- **最可能原因：** not-applicable / ...
+- **下一轮具体改变：** not-applicable / ...
+- **下一 owner/路由：** not-applicable / same owner / new owner / Lead / upstream owner
+
+首次失败不要求额外分类；同一 blocker 反复出现、下一轮没有新证据，或 integration attempts 达到有效上限时，Lead 必须填写以上四项。重置 attempts 后仍保留此前轮次，不覆盖失败历史。
+
 ## 8. 偏差与决策
 
 - **偏差：** 无 / `<deviation-id>`
@@ -106,3 +119,15 @@ subagent 不写本 Evidence；以上内容由 Lead 从实际 workspace、Git 和
 - **Parent result：** `<sha>`
 - **Source workspace：** `<workspace_ref>`
 - **Evidence：** `<Path>{roots.state}/specdev/changes/{change}/evidence/{ticket-id}.md</Path>`
+
+## Skill Execution Records
+
+按 `<Path>{roots.workflows}/specdev/common/rules/skill-invocation.md</Path>` 从真实执行轨迹填写以下 JSON 数组；每个 required 调用必须唯一匹配 Ticket 的 id、phase、operation 和 sha256，并有 passed 状态及可回读证据。没有绑定时保留空数组。仅阅读入口不能写 passed；失败/未执行保持 blocker，不伪造工具结果。
+
+```json
+[]
+```
+
+## 用户交付与源回读
+
+记录用户要求的实际数量、交付位置、源/链接/必要元数据回读、行为差异、备份和未完成项。Goal 有显式数量时在 `<Path>{roots.state}/specdev/changes/{change}/evidence/goal-delivery.md</Path>` 写 Delivery Records，与 map 合同逐项核对。字符统计包含移动后的参考文件，不等同于 Token 或套餐用量。
